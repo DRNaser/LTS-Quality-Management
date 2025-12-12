@@ -800,6 +800,395 @@ def get_week_comparison(df):
         'prev_cost': prev_df['Concession Cost'].sum() if 'Concession Cost' in prev_df.columns else 0
     }
 # ============================================================================
+# EXTENDED ANALYTICS FUNCTIONS
+# ============================================================================
+def get_delivery_type_mismatches(df):
+    """Compare actual_delivery_type vs promised_delivery_type."""
+    mismatches = []
+    
+    if 'actual_delivery_type' not in df.columns or 'promised_delivery_type' not in df.columns:
+        return pd.DataFrame()
+    
+    for idx, row in df.iterrows():
+        actual = str(row.get('actual_delivery_type', '')).strip()
+        promised = str(row.get('promised_delivery_type', '')).strip()
+        
+        if actual and promised and actual.lower() != promised.lower():
+            mismatches.append({
+                'tracking_id': row.get('tracking_id', 'Unknown'),
+                'transporter_id': row.get('transporter_id', 'Unknown'),
+                'promised': promised,
+                'actual': actual,
+                'zip_code': row.get('zip_code', 'Unknown'),
+                'cost': row.get('Concession Cost', 0)
+            })
+    
+    return pd.DataFrame(mismatches) if mismatches else pd.DataFrame()
+def get_contact_analysis(df):
+    """Analyze contact attempts and success rates."""
+    result = {
+        'total_calls': 0,
+        'total_texts': 0,
+        'successful_contacts': 0,
+        'unsuccessful_contacts': 0,
+        'success_rate': 0,
+        'avg_call_duration': 0,
+        'no_contact_count': 0,
+        'by_driver': []
+    }
+    
+    if 'call_event' in df.columns:
+        result['total_calls'] = int(df['call_event'].sum())
+    if 'text_event' in df.columns:
+        result['total_texts'] = int(df['text_event'].sum())
+    if 'Successful Contact Opportunity' in df.columns:
+        result['successful_contacts'] = int(df['Successful Contact Opportunity'].sum())
+    if 'Unsuccessful Contact Opportunity' in df.columns:
+        result['unsuccessful_contacts'] = int(df['Unsuccessful Contact Opportunity'].sum())
+    
+    total_contacts = result['successful_contacts'] + result['unsuccessful_contacts']
+    if total_contacts > 0:
+        result['success_rate'] = (result['successful_contacts'] / total_contacts) * 100
+    
+    if 'total_call_duration_seconds' in df.columns:
+        calls_with_duration = df[df['total_call_duration_seconds'] > 0]
+        if len(calls_with_duration) > 0:
+            result['avg_call_duration'] = calls_with_duration['total_call_duration_seconds'].mean()
+    
+    # No contact attempts
+    if 'call_event' in df.columns and 'text_event' in df.columns:
+        no_contact = df[(df['call_event'] == 0) & (df['text_event'] == 0)]
+        result['no_contact_count'] = len(no_contact)
+    
+    # By driver
+    if 'transporter_id' in df.columns:
+        for driver in df['transporter_id'].unique():
+            dd = df[df['transporter_id'] == driver]
+            calls = int(dd['call_event'].sum()) if 'call_event' in dd.columns else 0
+            success = int(dd['Successful Contact Opportunity'].sum()) if 'Successful Contact Opportunity' in dd.columns else 0
+            total = success + (int(dd['Unsuccessful Contact Opportunity'].sum()) if 'Unsuccessful Contact Opportunity' in dd.columns else 0)
+            rate = (success / total * 100) if total > 0 else 0
+            
+            if calls > 0 or total > 0:
+                result['by_driver'].append({
+                    'driver': driver,
+                    'calls': calls,
+                    'success_rate': round(rate, 1)
+                })
+        
+        result['by_driver'] = sorted(result['by_driver'], key=lambda x: x['success_rate'])[:10]
+    
+    return result
+def get_photo_compliance(df):
+    """Analyze photo compliance rates."""
+    result = {
+        'with_photo': 0,
+        'without_photo': 0,
+        'pod_eligible': 0,
+        'pod_missing': 0,
+        'compliance_rate': 0,
+        'by_driver': []
+    }
+    
+    if 'Photo On Delivery' in df.columns:
+        result['with_photo'] = int(df['Photo On Delivery'].sum())
+    if 'No Photo On Delivery' in df.columns:
+        result['without_photo'] = int(df['No Photo On Delivery'].sum())
+    if 'pod_eligible' in df.columns:
+        result['pod_eligible'] = int(df['pod_eligible'].sum())
+    
+    # POD missing = pod_eligible but no photo
+    if 'pod_eligible' in df.columns and 'Photo On Delivery' in df.columns:
+        pod_required = df[df['pod_eligible'] == 1]
+        pod_missing = pod_required[pod_required['Photo On Delivery'] == 0]
+        result['pod_missing'] = len(pod_missing)
+    
+    total = result['with_photo'] + result['without_photo']
+    if total > 0:
+        result['compliance_rate'] = (result['with_photo'] / total) * 100
+    
+    # By driver
+    if 'transporter_id' in df.columns and 'Photo On Delivery' in df.columns:
+        for driver in df['transporter_id'].unique():
+            dd = df[df['transporter_id'] == driver]
+            with_photo = int(dd['Photo On Delivery'].sum()) if 'Photo On Delivery' in dd.columns else 0
+            without_photo = int(dd['No Photo On Delivery'].sum()) if 'No Photo On Delivery' in dd.columns else 0
+            total = with_photo + without_photo
+            rate = (with_photo / total * 100) if total > 0 else 100
+            
+            if without_photo > 0:
+                result['by_driver'].append({
+                    'driver': driver,
+                    'missing': without_photo,
+                    'rate': round(rate, 1)
+                })
+        
+        result['by_driver'] = sorted(result['by_driver'], key=lambda x: x['missing'], reverse=True)[:10]
+    
+    return result
+def get_group_stop_analysis(df):
+    """Analyze correlation between group stops and issues."""
+    result = {
+        'total_group_stops': 0,
+        'group_stop_concessions': 0,
+        'non_group_concessions': 0,
+        'group_stop_rate': 0,
+        'correlation': 'Keine Daten'
+    }
+    
+    if 'Simultaneous Group Stops' not in df.columns:
+        return result
+    
+    group_stops = df[df['Simultaneous Group Stops'] > 0]
+    non_group = df[df['Simultaneous Group Stops'] == 0]
+    
+    result['total_group_stops'] = int(df['Simultaneous Group Stops'].sum())
+    result['group_stop_concessions'] = len(group_stops)
+    result['non_group_concessions'] = len(non_group)
+    
+    if len(df) > 0:
+        result['group_stop_rate'] = (len(group_stops) / len(df)) * 100
+    
+    # Simple correlation indicator
+    if result['group_stop_rate'] > 30:
+        result['correlation'] = '⚠️ Hoch - Group Stops korrelieren mit Concessions'
+    elif result['group_stop_rate'] > 15:
+        result['correlation'] = '📊 Mittel - Einige Korrelation sichtbar'
+    else:
+        result['correlation'] = '✅ Niedrig - Kaum Zusammenhang'
+    
+    return result
+def get_phr_analysis(df):
+    """Analyze Preference Honoured Rate."""
+    result = {
+        'total_with_pref': 0,
+        'phr_honoured': 0,
+        'phr_not_honoured': 0,
+        'honour_rate': 0,
+        'by_driver': []
+    }
+    
+    if 'PHR Honoured' not in df.columns:
+        return result
+    
+    result['phr_honoured'] = int(df['PHR Honoured'].sum())
+    result['total_with_pref'] = len(df)  # Assuming all rows have preferences
+    result['phr_not_honoured'] = result['total_with_pref'] - result['phr_honoured']
+    
+    if result['total_with_pref'] > 0:
+        result['honour_rate'] = (result['phr_honoured'] / result['total_with_pref']) * 100
+    
+    # By driver
+    if 'transporter_id' in df.columns:
+        for driver in df['transporter_id'].unique():
+            dd = df[df['transporter_id'] == driver]
+            honoured = int(dd['PHR Honoured'].sum())
+            total = len(dd)
+            rate = (honoured / total * 100) if total > 0 else 0
+            not_honoured = total - honoured
+            
+            if not_honoured > 0:
+                result['by_driver'].append({
+                    'driver': driver,
+                    'not_honoured': not_honoured,
+                    'rate': round(rate, 1)
+                })
+        
+        result['by_driver'] = sorted(result['by_driver'], key=lambda x: x['not_honoured'], reverse=True)[:10]
+    
+    return result
+def get_reason_code_analysis(df):
+    """Parse and analyze reason codes."""
+    result = {
+        'app_reasons': {},
+        'shipment_reasons': {},
+        'top_combinations': []
+    }
+    
+    if 'app_presented_reason_codes' in df.columns:
+        reasons = df['app_presented_reason_codes'].dropna()
+        for r in reasons:
+            r_str = str(r).strip()
+            if r_str and r_str.lower() != 'nan':
+                result['app_reasons'][r_str] = result['app_reasons'].get(r_str, 0) + 1
+        result['app_reasons'] = dict(sorted(result['app_reasons'].items(), key=lambda x: x[1], reverse=True)[:10])
+    
+    if 'shipment_reason' in df.columns:
+        reasons = df['shipment_reason'].dropna()
+        for r in reasons:
+            r_str = str(r).strip()
+            if r_str and r_str.lower() != 'nan':
+                result['shipment_reasons'][r_str] = result['shipment_reasons'].get(r_str, 0) + 1
+        result['shipment_reasons'] = dict(sorted(result['shipment_reasons'].items(), key=lambda x: x[1], reverse=True)[:10])
+    
+    return result
+def get_geo_distance_distribution(df):
+    """Get distribution of actual geo distances."""
+    result = {
+        'avg_distance': 0,
+        'max_distance': 0,
+        'over_25m': 0,
+        'over_50m': 0,
+        'over_100m': 0,
+        'distribution': []
+    }
+    
+    if 'geo_dist' not in df.columns:
+        return result
+    
+    geo = df['geo_dist'].dropna()
+    if len(geo) == 0:
+        return result
+    
+    result['avg_distance'] = round(geo.mean(), 1)
+    result['max_distance'] = round(geo.max(), 1)
+    result['over_25m'] = int((geo > 25).sum())
+    result['over_50m'] = int((geo > 50).sum())
+    result['over_100m'] = int((geo > 100).sum())
+    
+    # Distribution buckets
+    buckets = [(0, 10), (10, 25), (25, 50), (50, 100), (100, float('inf'))]
+    labels = ['0-10m', '10-25m', '25-50m', '50-100m', '>100m']
+    
+    for (low, high), label in zip(buckets, labels):
+        count = int(((geo >= low) & (geo < high)).sum())
+        result['distribution'].append({'range': label, 'count': count})
+    
+    return result
+def get_multi_issue_drivers(df):
+    """Identify drivers with multiple concurrent issues."""
+    result = []
+    
+    if 'Multiple Concessions Reasons' not in df.columns:
+        return result
+    
+    multi = df[df['Multiple Concessions Reasons'] > 0]
+    
+    if 'transporter_id' in multi.columns:
+        driver_counts = multi.groupby('transporter_id').size().sort_values(ascending=False)
+        
+        for driver, count in driver_counts.head(10).items():
+            dd = multi[multi['transporter_id'] == driver]
+            cost = dd['Concession Cost'].sum() if 'Concession Cost' in dd.columns else 0
+            result.append({
+                'driver': driver,
+                'multi_issues': int(count),
+                'cost': cost
+            })
+    
+    return result
+def get_executive_summary(df):
+    """Generate executive summary with pattern recognition and key insights."""
+    summary = {
+        'total_concessions': len(df),
+        'total_cost': df['Concession Cost'].sum() if 'Concession Cost' in df.columns else 0,
+        'total_drivers': df['transporter_id'].nunique() if 'transporter_id' in df.columns else 0,
+        'avg_per_driver': 0,
+        'top_issue': None,
+        'top_issue_count': 0,
+        'critical_drivers': 0,
+        'patterns': [],
+        'recommendations': [],
+        'time_patterns': {},
+        'risk_score': 0
+    }
+    
+    if summary['total_drivers'] > 0:
+        summary['avg_per_driver'] = summary['total_concessions'] / summary['total_drivers']
+    
+    # Identify top issue
+    issues = {
+        'Geo-Verstoß': df.get('Geo Distance > 25m', pd.Series([0])).sum(),
+        'Household': df.get('Delivered to Household Member / Customer', pd.Series([0])).sum(),
+        'Lieferpräferenz': df.get('Delivery preferences not followed', pd.Series([0])).sum(),
+        'Kein Foto': df.get('Unattended Delivery & No Photo on Delivery', pd.Series([0])).sum(),
+        'False Scan': df.get('Feedback False Scan Indicator', pd.Series([0])).sum(),
+    }
+    if issues:
+        top = max(issues.items(), key=lambda x: x[1])
+        summary['top_issue'] = top[0]
+        summary['top_issue_count'] = int(top[1])
+    
+    # Critical drivers (>10 concessions)
+    if 'transporter_id' in df.columns:
+        driver_counts = df.groupby('transporter_id').size()
+        summary['critical_drivers'] = int((driver_counts > 10).sum())
+    
+    # Time patterns
+    time_analysis = get_time_analysis(df)
+    summary['time_patterns'] = {
+        'peak_hour': time_analysis.get('peak_hour'),
+        'peak_day': time_analysis.get('peak_day'),
+        'peak_hour_pct': time_analysis.get('peak_hour_pct', 0),
+        'peak_day_pct': time_analysis.get('peak_day_pct', 0)
+    }
+    
+    # Pattern Recognition
+    patterns = []
+    
+    # Pattern 1: Time concentration
+    if summary['time_patterns']['peak_hour_pct'] > 25:
+        patterns.append(f"⏰ {summary['time_patterns']['peak_hour_pct']:.0f}% der Concessions in Peak-Stunde ({summary['time_patterns']['peak_hour']})")
+    
+    # Pattern 2: Day concentration
+    if summary['time_patterns']['peak_day_pct'] > 25:
+        patterns.append(f"📅 {summary['time_patterns']['peak_day_pct']:.0f}% der Concessions am {summary['time_patterns']['peak_day']}")
+    
+    # Pattern 3: Pareto (80/20 rule)
+    if 'transporter_id' in df.columns:
+        driver_counts = df.groupby('transporter_id').size().sort_values(ascending=False)
+        top_20_pct = int(len(driver_counts) * 0.2) or 1
+        top_20_concessions = driver_counts.head(top_20_pct).sum()
+        pareto_pct = (top_20_concessions / len(df)) * 100 if len(df) > 0 else 0
+        if pareto_pct > 60:
+            patterns.append(f"📊 Pareto: Top {top_20_pct} Fahrer verursachen {pareto_pct:.0f}% der Concessions")
+    
+    # Pattern 4: High no-contact rate
+    if 'call_event' in df.columns and 'text_event' in df.columns:
+        no_contact = len(df[(df['call_event'] == 0) & (df['text_event'] == 0)])
+        no_contact_pct = (no_contact / len(df)) * 100 if len(df) > 0 else 0
+        if no_contact_pct > 30:
+            patterns.append(f"📞 {no_contact_pct:.0f}% ohne Kontaktversuch")
+    
+    # Pattern 5: Photo compliance issue
+    if 'No Photo On Delivery' in df.columns:
+        no_photo = int(df['No Photo On Delivery'].sum())
+        no_photo_pct = (no_photo / len(df)) * 100 if len(df) > 0 else 0
+        if no_photo_pct > 20:
+            patterns.append(f"📸 {no_photo_pct:.0f}% ohne Foto-Nachweis")
+    
+    # Pattern 6: Geo distance issues
+    if 'geo_dist' in df.columns:
+        high_geo = len(df[df['geo_dist'] > 50])
+        high_geo_pct = (high_geo / len(df)) * 100 if len(df) > 0 else 0
+        if high_geo_pct > 15:
+            patterns.append(f"📍 {high_geo_pct:.0f}% mit Geo-Abstand >50m")
+    
+    summary['patterns'] = patterns
+    
+    # Recommendations based on patterns
+    recommendations = []
+    if summary['top_issue'] == 'Kein Foto':
+        recommendations.append("📸 Foto-Schulung für Fahrer empfohlen")
+    if summary['top_issue'] == 'Geo-Verstoß':
+        recommendations.append("📍 GPS-Genauigkeit prüfen / Schulung zu korrekten Stops")
+    if summary['critical_drivers'] > 3:
+        recommendations.append(f"🎯 Fokus auf {summary['critical_drivers']} kritische Fahrer")
+    if summary['time_patterns']['peak_hour']:
+        recommendations.append(f"⏰ Peak-Zeit {summary['time_patterns']['peak_hour']} analysieren")
+    
+    summary['recommendations'] = recommendations[:4]  # Max 4
+    
+    # Risk Score (0-100)
+    risk = 0
+    risk += min(30, summary['critical_drivers'] * 5)  # Max 30 for critical drivers
+    risk += min(20, (summary['avg_per_driver'] - 3) * 5) if summary['avg_per_driver'] > 3 else 0
+    risk += min(20, len(patterns) * 5)  # Max 20 for patterns
+    risk += min(30, (summary['total_cost'] / 1000))  # Max 30 for cost
+    summary['risk_score'] = min(100, int(risk))
+    
+    return summary
+# ============================================================================
 # MAIN
 # ============================================================================
 def main():
@@ -837,7 +1226,7 @@ def main():
     
     st.markdown(f'<div class="header-stats" style="margin-bottom: 24px;">{week_range} &nbsp; • &nbsp; {total_dnr} Concessions</div>', unsafe_allow_html=True)
     # --- Navigation ---
-    tab_overview, tab_drivers, tab_insights, tab_actions = st.tabs(["Overview", "Drivers", "Insights", "Actions"])
+    tab_overview, tab_drivers, tab_insights, tab_analytics, tab_actions = st.tabs(["Overview", "Drivers", "Insights", "Analytics", "Actions"])
     # 1. OVERVIEW (Roadmap transformed)
     with tab_overview:
         st.markdown("### Focus Areas")
@@ -1230,7 +1619,305 @@ def main():
             """, unsafe_allow_html=True)
         else:
             st.info("Mindestens 2 Wochen Daten benötigt für Vergleich")
-    # 4. ACTIONS (Coaching)
+    
+    # 4. ANALYTICS (Extended Analytics Suite)
+    with tab_analytics:
+        st.markdown("## 📊 Extended Analytics")
+        
+        # --- EXECUTIVE SUMMARY ---
+        st.markdown("### 🎯 Executive Summary")
+        exec_summary = get_executive_summary(df)
+        
+        # Risk Score Gauge
+        risk_color = "#c5221f" if exec_summary['risk_score'] > 60 else "#f9ab00" if exec_summary['risk_score'] > 30 else "#137333"
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+            <div style="background: linear-gradient(135deg, {risk_color}22 0%, {risk_color}11 100%); 
+                        border: 3px solid {risk_color}; border-radius: 50%; width: 100px; height: 100px;
+                        display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <div style="font-size: 2rem; font-weight: 700; color: {risk_color};">{exec_summary['risk_score']}</div>
+                <div style="font-size: 0.7rem; color: {risk_color};">RISIKO</div>
+            </div>
+            <div style="flex: 1;">
+                <div style="font-size: 1.1rem; font-weight: 500; margin-bottom: 8px;">
+                    {exec_summary['total_concessions']} Concessions · €{exec_summary['total_cost']:,.0f} · {exec_summary['total_drivers']} Fahrer
+                </div>
+                <div style="font-size: 0.9rem; color: #5f6368;">
+                    Top-Problem: <strong>{exec_summary['top_issue']}</strong> ({exec_summary['top_issue_count']} Fälle) · 
+                    Ø {exec_summary['avg_per_driver']:.1f} pro Fahrer · 
+                    {exec_summary['critical_drivers']} kritische Fahrer
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Patterns & Recommendations
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**🔍 Erkannte Muster:**")
+            if exec_summary['patterns']:
+                for p in exec_summary['patterns']:
+                    st.markdown(f"• {p}")
+            else:
+                st.info("Keine auffälligen Muster erkannt")
+        
+        with col2:
+            st.markdown("**💡 Empfehlungen:**")
+            if exec_summary['recommendations']:
+                for r in exec_summary['recommendations']:
+                    st.markdown(f"• {r}")
+            else:
+                st.success("Keine dringenden Maßnahmen erforderlich")
+        
+        st.markdown("---")
+        
+        # --- TIME ANALYSIS ---
+        st.markdown("### ⏰ Zeitanalyse & Muster")
+        time_data = get_time_analysis(df)
+        
+        if time_data['peak_hour']:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown(f"""
+                <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 500; color: #1a73e8;">{time_data['peak_hour']}</div>
+                    <div style="font-size: 0.75rem; color: #5f6368;">Peak-Stunde ({time_data['peak_hour_pct']:.0f}%)</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                st.markdown(f"""
+                <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 500; color: #1a73e8;">{time_data['peak_day'] or 'N/A'}</div>
+                    <div style="font-size: 0.75rem; color: #5f6368;">Risiko-Tag ({time_data['peak_day_pct']:.0f}%)</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col3:
+                days_text = f"{time_data['days_since_last']} Tage" if time_data['days_since_last'] is not None else "N/A"
+                st.markdown(f"""
+                <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 500; color: #1a73e8;">{days_text}</div>
+                    <div style="font-size: 0.75rem; color: #5f6368;">Seit letztem Vorfall</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Hourly distribution chart
+            if time_data['hourly_dist']:
+                st.markdown("**Stündliche Verteilung:**")
+                hourly_df = pd.DataFrame([
+                    {'Stunde': f"{h:02d}:00", 'Anzahl': c} 
+                    for h, c in sorted(time_data['hourly_dist'].items())
+                ])
+                fig = px.bar(hourly_df, x='Stunde', y='Anzahl', text='Anzahl')
+                fig.update_traces(marker_color='#1a73e8', textposition='outside')
+                fig.update_layout(
+                    plot_bgcolor='white', height=200,
+                    margin=dict(t=10, l=0, r=0, b=0),
+                    xaxis=dict(showgrid=False, title=None, tickangle=-45),
+                    yaxis=dict(showgrid=True, gridcolor='#f1f3f4', title=None)
+                )
+                st.plotly_chart(fig, width='stretch')
+            
+            # Daily distribution
+            if time_data['daily_dist']:
+                st.markdown("**Wochentag-Verteilung:**")
+                daily_df = pd.DataFrame([
+                    {'Tag': day, 'Anzahl': count} 
+                    for day, count in time_data['daily_dist'].items()
+                ])
+                fig = px.bar(daily_df, x='Tag', y='Anzahl', text='Anzahl')
+                fig.update_traces(marker_color='#34a853', textposition='outside')
+                fig.update_layout(
+                    plot_bgcolor='white', height=180,
+                    margin=dict(t=10, l=0, r=0, b=0),
+                    xaxis=dict(showgrid=False, title=None),
+                    yaxis=dict(showgrid=True, gridcolor='#f1f3f4', title=None)
+                )
+                st.plotly_chart(fig, width='stretch')
+        else:
+            st.info("Keine Zeitstempel-Daten für Analyse verfügbar (delivery_date_time, dnr_date)")
+        
+        st.markdown("---")
+        
+        # --- DELIVERY TYPE MISMATCHES ---
+        st.markdown("### 🔄 Actual vs Promised Delivery Type")
+        type_mismatches = get_delivery_type_mismatches(df)
+        if len(type_mismatches) > 0:
+            st.markdown(f"""
+            <div class="hv-alert">
+                <div class="hv-alert-title">⚠️ {len(type_mismatches)} Zustellart-Abweichungen</div>
+                <div class="hv-alert-detail">Tatsächliche Zustellart weicht von versprochener ab</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Top mismatches by type
+            if 'promised' in type_mismatches.columns and 'actual' in type_mismatches.columns:
+                type_mismatches['mismatch'] = type_mismatches['promised'] + ' → ' + type_mismatches['actual']
+                top_types = type_mismatches['mismatch'].value_counts().head(5)
+                for mtype, count in top_types.items():
+                    st.markdown(f"• **{mtype}**: {count} Fälle")
+            
+            with st.expander("Details anzeigen"):
+                st.dataframe(type_mismatches.head(20), width='stretch', hide_index=True)
+        else:
+            if 'actual_delivery_type' in df.columns:
+                st.success("✓ Keine Zustellart-Abweichungen erkannt")
+            else:
+                st.info("Spalten 'actual_delivery_type' / 'promised_delivery_type' nicht vorhanden")
+        
+        st.markdown("---")
+        
+        # --- CONTACT ANALYSIS ---
+        st.markdown("### 📞 Kontakt-Analyse")
+        contact = get_contact_analysis(df)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Anrufe", contact['total_calls'])
+        with col2:
+            st.metric("SMS", contact['total_texts'])
+        with col3:
+            st.metric("Erfolgsrate", f"{contact['success_rate']:.1f}%")
+        with col4:
+            st.metric("Ø Dauer", f"{contact['avg_call_duration']:.0f}s")
+        
+        if contact['no_contact_count'] > 0:
+            st.warning(f"⚠️ {contact['no_contact_count']} Concessions ohne jeden Kontaktversuch")
+        
+        if contact['by_driver']:
+            with st.expander("Fahrer mit niedrigster Erfolgsrate"):
+                for d in contact['by_driver'][:5]:
+                    st.markdown(f"• {d['driver']}: {d['success_rate']:.0f}% ({d['calls']} Anrufe)")
+        
+        st.markdown("---")
+        
+        # --- PHOTO COMPLIANCE ---
+        st.markdown("### 📸 Foto-Compliance")
+        photo = get_photo_compliance(df)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Mit Foto", photo['with_photo'])
+        with col2:
+            st.metric("Ohne Foto", photo['without_photo'])
+        with col3:
+            compliance_color = "normal" if photo['compliance_rate'] > 80 else "inverse"
+            st.metric("Compliance", f"{photo['compliance_rate']:.1f}%")
+        
+        if photo['pod_missing'] > 0:
+            st.error(f"🚨 {photo['pod_missing']} Fälle: POD erforderlich aber kein Foto")
+        
+        if photo['by_driver']:
+            with st.expander("Fahrer mit meisten fehlenden Fotos"):
+                for d in photo['by_driver'][:5]:
+                    st.markdown(f"• {d['driver']}: {d['missing']} fehlend ({d['rate']:.0f}% Rate)")
+        
+        st.markdown("---")
+        
+        # --- GROUP STOP ANALYSIS ---
+        st.markdown("### 🔄 Group Stop Korrelation")
+        group = get_group_stop_analysis(df)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Group Stop Concessions", group['group_stop_concessions'])
+        with col2:
+            st.metric("Anteil", f"{group['group_stop_rate']:.1f}%")
+        
+        st.markdown(f"**Korrelation:** {group['correlation']}")
+        
+        st.markdown("---")
+        
+        # --- PHR ANALYSIS ---
+        st.markdown("### ✅ Präferenz Honoured Rate (PHR)")
+        phr = get_phr_analysis(df)
+        
+        if phr['total_with_pref'] > 0:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Eingehalten", phr['phr_honoured'])
+            with col2:
+                st.metric("Nicht eingehalten", phr['phr_not_honoured'])
+            with col3:
+                st.metric("PHR Rate", f"{phr['honour_rate']:.1f}%")
+            
+            if phr['by_driver']:
+                with st.expander("Fahrer mit meisten Präferenz-Verstößen"):
+                    for d in phr['by_driver'][:5]:
+                        st.markdown(f"• {d['driver']}: {d['not_honoured']} Verstöße ({d['rate']:.0f}% Rate)")
+        else:
+            st.info("Keine PHR-Daten verfügbar")
+        
+        st.markdown("---")
+        
+        # --- REASON CODE ANALYSIS ---
+        st.markdown("### 🏷️ Reason Code Analyse")
+        reasons = get_reason_code_analysis(df)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**App Reason Codes:**")
+            if reasons['app_reasons']:
+                for code, count in list(reasons['app_reasons'].items())[:5]:
+                    st.markdown(f"• {code}: **{count}**")
+            else:
+                st.info("Keine App Reason Codes")
+        
+        with col2:
+            st.markdown("**Shipment Reasons:**")
+            if reasons['shipment_reasons']:
+                for code, count in list(reasons['shipment_reasons'].items())[:5]:
+                    st.markdown(f"• {code}: **{count}**")
+            else:
+                st.info("Keine Shipment Reasons")
+        
+        st.markdown("---")
+        
+        # --- GEO DISTANCE DISTRIBUTION ---
+        st.markdown("### 📍 Geo-Distanz Verteilung")
+        geo = get_geo_distance_distribution(df)
+        
+        if geo['distribution']:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Ø Distanz", f"{geo['avg_distance']}m")
+            with col2:
+                st.metric("Max Distanz", f"{geo['max_distance']}m")
+            with col3:
+                st.metric(">100m", geo['over_100m'])
+            
+            # Distribution chart
+            dist_df = pd.DataFrame(geo['distribution'])
+            fig = px.bar(dist_df, x='range', y='count', text='count')
+            fig.update_traces(marker_color='#1a73e8', textposition='outside')
+            fig.update_layout(
+                plot_bgcolor='white', height=200,
+                margin=dict(t=10, l=0, r=0, b=0),
+                xaxis=dict(showgrid=False, title=None),
+                yaxis=dict(showgrid=True, gridcolor='#f1f3f4', title=None)
+            )
+            st.plotly_chart(fig, width='stretch')
+        else:
+            st.info("Keine geo_dist Spalte vorhanden")
+        
+        st.markdown("---")
+        
+        # --- MULTI-ISSUE DRIVERS ---
+        st.markdown("### ⚠️ Multi-Issue Fahrer")
+        multi = get_multi_issue_drivers(df)
+        
+        if multi:
+            st.markdown("Fahrer mit mehreren gleichzeitigen Concession-Gründen:")
+            for d in multi[:5]:
+                st.markdown(f"""
+                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f3f4;">
+                    <span style="font-weight: 500;">{d['driver']}</span>
+                    <span>{d['multi_issues']} Multi-Issues · €{d['cost']:,.0f}</span>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("Keine Multi-Issue Daten verfügbar")
+    
+    # 5. ACTIONS (Coaching)
     with tab_actions:
         # Build driver list with details for dropdown
         driver_opts = []
