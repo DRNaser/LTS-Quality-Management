@@ -711,7 +711,7 @@ def get_driver_enhanced_stats(df, driver_id):
         stats['dimension_misbookings'] = len(oversized)
     
     if 'Mailbox Eligible, Delivered Elsewhere' in dd.columns:
-        stats['dimension_misbookings'] += dd['Mailbox Eligible, Delivered Elsewhere'].sum()
+        stats['dimension_misbookings'] += int(dd['Mailbox Eligible, Delivered Elsewhere'].sum())
     
     # Contact attempts
     if 'call_event' in dd.columns:
