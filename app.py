@@ -587,105 +587,297 @@ def main():
                 st.markdown(f"• **{z}**: {c} ({pct:.0f}%)")
     
     # ========================================================================
-    # TAB 4: COACHING
+    # TAB 4: COACHING - Enhanced Behavioral Psychology Version
     # ========================================================================
     with tab4:
-        opts = []
+        # Build driver list with percentile ranking
+        driver_stats = []
         for did in df['transporter_id'].unique():
             dd = df[df['transporter_id'] == did]
-            mp, _ = get_driver_main_problem(dd)
-            opts.append({'id': did, 'label': f"{did[:10]}.. ({len(dd)})", 'count': len(dd), 'problem': mp})
-        opts = sorted(opts, key=lambda x: x['count'], reverse=True)
+            mp, cnts = get_driver_main_problem(dd)
+            driver_stats.append({
+                'id': did, 
+                'count': len(dd), 
+                'problem': mp,
+                'counts': cnts
+            })
+        driver_stats = sorted(driver_stats, key=lambda x: x['count'], reverse=True)
         
+        # Calculate percentiles
+        total_drivers = len(driver_stats)
+        for i, d in enumerate(driver_stats):
+            d['rank'] = i + 1
+            d['percentile'] = ((i + 1) / total_drivers) * 100
+            # Traffic light based on rank
+            if d['percentile'] <= 10:
+                d['status'] = '🔴'
+                d['status_text'] = 'KRITISCH'
+                d['status_class'] = 'critical'
+            elif d['percentile'] <= 30:
+                d['status'] = '🟠'
+                d['status_text'] = 'RISIKO'
+                d['status_class'] = 'warning'
+            else:
+                d['status'] = '🟢'
+                d['status_text'] = 'OK'
+                d['status_class'] = 'ok'
+        
+        # Driver selection
         sel = st.selectbox(
-            "Fahrer", 
-            options=[o['id'] for o in opts],
-            format_func=lambda x: next((o['label'] for o in opts if o['id'] == x), x),
+            "Fahrer auswählen", 
+            options=[d['id'] for d in driver_stats],
+            format_func=lambda x: f"{next((d['status'] for d in driver_stats if d['id'] == x), '')} {x[:12]}... ({next((d['count'] for d in driver_stats if d['id'] == x), 0)} DSC)",
             label_visibility="collapsed"
         )
         
         if sel:
+            # Get driver data
             driver_data = df[df['transporter_id'] == sel]
-            mp, counts = get_driver_main_problem(driver_data)
-            total = len(driver_data)
-            weeks_active = driver_data['year_week'].nunique() if 'year_week' in driver_data.columns else 1
-            hv = int(driver_data.get('High Value Item (Y/N)', pd.Series([0])).sum())
+            driver_info = next((d for d in driver_stats if d['id'] == sel), None)
             
-            trend = get_weekly_trend(df, sel)
-            trend_txt = "↑" if len(trend) >= 2 and trend[-1] > trend[-2] else "↓" if len(trend) >= 2 and trend[-1] < trend[-2] else "→"
-            
-            # Metrics row
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("DSC", total)
-            c2.metric("Wochen", weeks_active)
-            c3.metric("Trend", trend_txt)
-            c4.metric("HV", hv if hv > 0 else "—")
-            
-            # Coaching content
-            if counts.get('False Scan', 0) > 0:
-                problem = f"🚨 KRITISCH: {int(counts['False Scan'])}x False Scan!"
-                questions = ["Erkläre diese Fälle", "Scan im Fahrzeug?", "Weißt du: False Scan = Kündigung?"]
-                commit = "Erste Verwarnung. Nächster Vorfall = HR."
-            elif counts.get('Household Member', 0) > 0:
-                problem = f"{int(counts['Household Member'])}x 'Household Member' ohne echte Übergabe"
-                questions = ["Wann Household Member?", "Was bei Ablage?", "Ohne Foto = wir zahlen"]
-                commit = "Ablage = Foto + Safe Location"
-            elif counts.get('Geo Distance', 0) > 0:
-                problem = f"{int(counts['Geo Distance'])}x GPS >25m beim Scan"
-                questions = ["Scannst du im Auto?", "Kennst du Group Stop Ablauf?"]
-                commit = "Scan IMMER an Haustür"
-            else:
-                problem = "Verschiedene Issues - Detailanalyse nötig"
-                questions = ["Lass uns Zustellungen durchgehen"]
-                commit = "Follow-up in 1 Woche"
-            
-            st.markdown(f"""
-            <div class="coaching-box">
-                <div class="coaching-header">🎓 {sel[:14]}...</div>
-                <div class="coaching-section">
-                    <div class="coaching-label">Problem</div>
-                    <div class="coaching-content">{problem}</div>
-                </div>
-                <div class="coaching-section">
-                    <div class="coaching-label">Fragen</div>
-                    {''.join(f'<div class="coaching-question">{q}</div>' for q in questions)}
-                </div>
-                <div class="coaching-section">
-                    <div class="coaching-label">Commitment</div>
-                    <div class="coaching-commit">{commit}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Breakdown
-            with st.expander("📊 Details"):
-                breakdown = []
-                for col, label in [
-                    ('Geo Distance > 25m', 'Geo'),
-                    ('Delivered to Household Member / Customer', 'Household'),
-                    ('Delivery preferences not followed', 'Prefs'),
-                    ('Unattended Delivery & No Photo on Delivery', 'No Photo'),
-                    ('Feedback False Scan Indicator', 'False Scan')
-                ]:
-                    if col in driver_data.columns:
-                        cnt = int(driver_data[col].sum())
-                        if cnt > 0:
-                            breakdown.append({'Typ': label, '#': cnt})
+            if driver_info:
+                total = driver_info['count']
+                mp = driver_info['problem']
+                counts = driver_info['counts']
+                percentile = driver_info['percentile']
+                status = driver_info['status']
+                status_text = driver_info['status_text']
                 
-                if breakdown:
-                    st.dataframe(pd.DataFrame(breakdown), use_container_width=True, hide_index=True)
+                weeks_active = driver_data['year_week'].nunique() if 'year_week' in driver_data.columns else 1
+                hv = int(driver_data.get('High Value Item (Y/N)', pd.Series([0])).sum())
                 
+                # Get top ZIP
+                top_zip = ""
+                zip_pct = 0
                 if 'zip_code' in driver_data.columns:
-                    zips = [str(z) for z in driver_data['zip_code'].value_counts().head(3).index.tolist()]
-                    st.markdown(f"**PLZ:** {', '.join(zips)}")
-            
-            # Download
-            protocol = f"""COACHING: {sel}
-Datum: {datetime.now().strftime('%d.%m.%Y')}
-Problem: {problem}
-Fragen: {'; '.join(questions)}
-Commit: {commit}
+                    zc = driver_data['zip_code'].value_counts()
+                    if len(zc) > 0:
+                        top_zip = str(zc.index[0])
+                        zip_pct = (zc.iloc[0] / total) * 100
+                
+                # ================================================================
+                # NEXT ACTION BOX (Top Priority)
+                # ================================================================
+                if percentile <= 10:
+                    next_action = "🔴 Ride-Along erforderlich"
+                    action_bg = "#fef2f2"
+                    action_border = "#fecaca"
+                elif percentile <= 30:
+                    next_action = "🟠 1:1 Coaching Gespräch"
+                    action_bg = "#fff7ed"
+                    action_border = "#fed7aa"
+                else:
+                    next_action = "🟢 Beobachtung fortsetzen"
+                    action_bg = "#f0fdf4"
+                    action_border = "#bbf7d0"
+                
+                st.markdown(f"""
+                <div style="background: {action_bg}; border: 2px solid {action_border}; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                    <div style="font-size: 0.7rem; color: #6b7280; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Nächster Schritt</div>
+                    <div style="font-size: 1.1rem; font-weight: 700;">{next_action}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # ================================================================
+                # RISK STATUS (Traffic Light + Percentile)
+                # ================================================================
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: white; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size: 1.5rem; margin-bottom: 4px;">{status} {sel[:14]}...</div>
+                            <div style="font-size: 0.85rem; opacity: 0.8;">Du bist aktuell im <strong>obersten {100 - percentile:.0f}%</strong> Risikobereich.</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 2rem; font-weight: 700;">{total}</div>
+                            <div style="font-size: 0.7rem; opacity: 0.7;">Concessions</div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # ================================================================
+                # #1 ROOT CAUSE (Highlighted)
+                # ================================================================
+                root_cause_name = mp
+                root_cause_count = max(counts.values()) if counts else 0
+                
+                st.markdown(f"""
+                <div style="background: white; border-left: 4px solid #ef4444; border-radius: 8px; padding: 14px; margin-bottom: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
+                    <div style="font-size: 0.65rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Dein #1 Problem</div>
+                    <div style="font-size: 1.1rem; font-weight: 700; color: #dc2626; margin-top: 4px;">{root_cause_name}</div>
+                    <div style="font-size: 0.8rem; color: #374151; margin-top: 4px;">{int(root_cause_count)}× in den letzten {weeks_active} Wochen</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # PLZ Risk Overlay
+                if top_zip and zip_pct > 30:
+                    st.markdown(f"""
+                    <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <span style="font-weight: 600;">📍 {zip_pct:.0f}% deiner DNRs stammen aus PLZ {top_zip}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.markdown("---")
+                
+                # ================================================================
+                # 5-STEP COACHING SCRIPT
+                # ================================================================
+                
+                weeks_str = f"KW{driver_data['year_week'].min().split('-')[1] if 'year_week' in driver_data.columns and '-' in str(driver_data['year_week'].iloc[0]) else '?'}-{driver_data['year_week'].max().split('-')[1] if 'year_week' in driver_data.columns and '-' in str(driver_data['year_week'].iloc[0]) else '?'}" if 'year_week' in driver_data.columns else ""
+                
+                # Build specific coaching based on root cause
+                if counts.get('False Scan', 0) > 0:
+                    fs_count = int(counts['False Scan'])
+                    fact = f"In {weeks_str} hattest du {total} Concessions. {fs_count} davon wegen False Scan."
+                    behavior = f"Die Daten zeigen, dass du {fs_count}× gescannt hast an Orten, an denen du laut GPS nicht warst."
+                    risk = "False Scans sind ein schwerer Verstoß und können zur sofortigen Kündigung führen. Das ist keine Verhandlungssache."
+                    rules = ["❌ Niemals im Fahrzeug scannen", "✅ Scan NUR direkt an der Haustür", "❌ Unsicher? → lieber No Access"]
+                    commitment = "Ich bestätige, dass ich ab sofort ausschließlich an der Haustür scanne."
+                    
+                elif counts.get('Household Member', 0) > 0:
+                    hm_count = int(counts['Household Member'])
+                    geo_count = int(counts.get('Geo Distance', 0))
+                    fact = f"In {weeks_str} hattest du {total} Concessions. {hm_count} davon wegen Household-Zustellung{f' und {geo_count} wegen Geo >25m' if geo_count > 0 else ''}."
+                    behavior = f"Die Daten zeigen, dass Pakete als 'Household Member' markiert wurden, ohne persönliche Übergabe{' – und teils mit großem Abstand zum Zielort' if geo_count > 0 else ''}."
+                    risk = f"Diese Art von Scans führt häufig zu DNRs{f' und betrifft besonders PLZ {top_zip}' if top_zip else ''}. Wiederholungen führen zu Route-Entzug oder Ride-Along."
+                    rules = ["✅ Household NUR bei persönlicher Übergabe", "✅ Bei Ablage → Safe Location + Foto", "❌ Unsicher? → lieber Reattempt"]
+                    commitment = "Ich bestätige, dass ich 'Household Member' nur bei persönlicher Übergabe auswähle."
+                    
+                elif counts.get('Geo Distance', 0) > 0:
+                    geo_count = int(counts['Geo Distance'])
+                    fact = f"In {weeks_str} hattest du {total} Concessions. {geo_count} davon wegen GPS-Abweichung >25m."
+                    behavior = f"In {geo_count} Fällen hast du >25m vom Zielort gescannt. Das passiert meist im Auto bei Group Stops."
+                    risk = "Scans im Fahrzeug werden vom System als verdächtig erkannt und führen automatisch zu Concession-Kosten."
+                    rules = ["✅ Scan IMMER an der Haustür", "✅ Group Stops: Jedes Paket einzeln vor Ort scannen", "❌ Niemals im Fahrzeug scannen"]
+                    commitment = "Ich bestätige, dass ich ab sofort erst an der Haustür scanne, nicht im Fahrzeug."
+                    
+                else:
+                    fact = f"In {weeks_str} hattest du {total} Concessions mit verschiedenen Ursachen."
+                    behavior = "Es gibt kein klares Muster – wir müssen gemeinsam die Einzelfälle durchgehen."
+                    risk = "Ohne klare Ursache können wir das Problem nicht gezielt lösen."
+                    rules = ["✅ Alle Richtlinien beachten", "✅ Bei Unsicherheit nachfragen"]
+                    commitment = "Ich nehme an einem detaillierten Coaching teil."
+                
+                # Display 5-Step Structure
+                st.markdown("### 📋 Coaching-Protokoll")
+                
+                # Step 1: Fact
+                st.markdown(f"""
+                <div style="background: white; border-radius: 8px; padding: 14px; margin-bottom: 10px; border: 1px solid #e5e7eb;">
+                    <div style="font-size: 0.65rem; color: #6b7280; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;">1. Klarer Fakt</div>
+                    <div style="font-size: 0.9rem; color: #111827; font-weight: 500;">{fact}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Step 2: Behavior
+                st.markdown(f"""
+                <div style="background: white; border-radius: 8px; padding: 14px; margin-bottom: 10px; border: 1px solid #e5e7eb;">
+                    <div style="font-size: 0.65rem; color: #6b7280; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;">2. Konkretes Verhalten</div>
+                    <div style="font-size: 0.9rem; color: #111827;">{behavior}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Step 3: Risk
+                st.markdown(f"""
+                <div style="background: #fef2f2; border-radius: 8px; padding: 14px; margin-bottom: 10px; border: 1px solid #fecaca;">
+                    <div style="font-size: 0.65rem; color: #991b1b; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;">3. Risiko</div>
+                    <div style="font-size: 0.9rem; color: #7f1d1d;">{risk}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Step 4: Rules
+                st.markdown(f"""
+                <div style="background: white; border-radius: 8px; padding: 14px; margin-bottom: 10px; border: 1px solid #e5e7eb;">
+                    <div style="font-size: 0.65rem; color: #6b7280; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;">4. Klare Regeln</div>
+                    <div style="font-size: 0.9rem; color: #111827;">{'<br>'.join(rules)}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Step 5: Commitment
+                st.markdown(f"""
+                <div style="background: #f0fdf4; border-radius: 8px; padding: 14px; margin-bottom: 16px; border: 2px solid #86efac;">
+                    <div style="font-size: 0.65rem; color: #166534; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;">5. Commitment</div>
+                    <div style="font-size: 0.9rem; color: #166534; font-weight: 600;">"{commitment}"</div>
+                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #86efac; font-size: 0.8rem; color: #166534;">
+                        ☐ Unterschrift Fahrer: _______________ Datum: ___________
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # ================================================================
+                # DETAILS EXPANDER
+                # ================================================================
+                with st.expander("📊 Detailanalyse"):
+                    # Problem breakdown
+                    breakdown = []
+                    for col, label in [
+                        ('Geo Distance > 25m', 'Geo >25m'),
+                        ('Delivered to Household Member / Customer', 'Household'),
+                        ('Delivery preferences not followed', 'Prefs ignoriert'),
+                        ('Unattended Delivery & No Photo on Delivery', 'Kein Foto'),
+                        ('Feedback False Scan Indicator', '🚨 False Scan')
+                    ]:
+                        if col in driver_data.columns:
+                            cnt = int(driver_data[col].sum())
+                            if cnt > 0:
+                                breakdown.append({'Problem': label, 'Anzahl': cnt, 'Anteil': f"{(cnt/total)*100:.0f}%"})
+                    
+                    if breakdown:
+                        st.dataframe(pd.DataFrame(breakdown), use_container_width=True, hide_index=True)
+                    
+                    # ZIP breakdown
+                    if 'zip_code' in driver_data.columns:
+                        st.markdown("**PLZ-Verteilung:**")
+                        zc = driver_data['zip_code'].value_counts().head(3)
+                        for z, c in zc.items():
+                            pct = (c / total) * 100
+                            st.markdown(f"• PLZ {z}: {c}× ({pct:.0f}%)")
+                    
+                    # Weekly pattern
+                    if 'year_week' in driver_data.columns:
+                        st.markdown("**Wöchentlicher Verlauf:**")
+                        weekly = driver_data.groupby('year_week').size()
+                        for w, c in weekly.items():
+                            st.markdown(f"• {w}: {c} Concessions")
+                
+                # ================================================================
+                # DOWNLOAD PROTOCOL
+                # ================================================================
+                protocol = f"""═══════════════════════════════════════════════
+COACHING-PROTOKOLL
+═══════════════════════════════════════════════
+Datum: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+Fahrer-ID: {sel}
+Status: {status} {status_text} (Top {100-percentile:.0f}%)
+Concessions: {total} in {weeks_active} Wochen
+═══════════════════════════════════════════════
+NÄCHSTER SCHRITT: {next_action}
+═══════════════════════════════════════════════
+#1 HAUPTPROBLEM: {root_cause_name} ({int(root_cause_count)}×)
+───────────────────────────────────────────────
+1. KLARER FAKT
+{fact}
+2. KONKRETES VERHALTEN
+{behavior}
+3. RISIKO
+{risk}
+4. KLARE REGELN
+{chr(10).join(rules)}
+5. COMMITMENT
+"{commitment}"
+───────────────────────────────────────────────
+☐ Unterschrift Fahrer: ___________________________
+☐ Unterschrift Manager: __________________________
+Datum: ___________
+═══════════════════════════════════════════════
 """
-            st.download_button("📥 Protokoll", protocol, f"coaching_{sel[:8]}.txt")
+                
+                st.download_button(
+                    "📥 Coaching-Protokoll herunterladen",
+                    protocol,
+                    file_name=f"coaching_{sel[:10]}_{datetime.now().strftime('%Y%m%d')}.txt",
+                    use_container_width=True
+                )
 if __name__ == "__main__":
     main()
