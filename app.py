@@ -39,14 +39,17 @@ st.markdown("""
     #MainMenu, footer, .stDeployButton { display: none; }
     header[data-testid="stHeader"] { background: transparent; }
     
-    /* Compact main container */
+    /* Main container - responsive */
     .main .block-container {
-        padding: 0.5rem 0.75rem !important;
-        max-width: 100% !important;
+        padding: 1.5rem 2rem !important;
+        max-width: 1200px !important;
     }
     
-    /* Hide sidebar completely on mobile */
     @media (max-width: 768px) {
+        .main .block-container {
+            padding: 0.5rem 0.75rem !important;
+            max-width: 100% !important;
+        }
         [data-testid="stSidebar"] {
             display: none !important;
         }
@@ -55,22 +58,34 @@ st.markdown("""
         }
     }
     
-    /* Compact header */
+    /* Header - responsive */
     .app-header {
         background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
         color: white;
-        padding: 12px 16px;
-        border-radius: 10px;
-        margin-bottom: 12px;
+        padding: 16px 24px;
+        border-radius: 12px;
+        margin-bottom: 20px;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    }
+    
+    @media (max-width: 768px) {
+        .app-header {
+            padding: 12px 16px;
+            margin-bottom: 12px;
+        }
     }
     
     .app-title {
-        font-size: 1rem;
+        font-size: 1.25rem;
         font-weight: 700;
         margin: 0;
+    }
+    
+    @media (max-width: 768px) {
+        .app-title { font-size: 1rem; }
     }
     
     .app-stat {
@@ -82,35 +97,58 @@ st.markdown("""
         font-weight: 600;
     }
     
-    /* Compact cards */
+    /* Cards - responsive */
     .compact-card {
         background: white;
-        border-radius: 10px;
+        border-radius: 12px;
         border: 1px solid var(--gray-200);
-        padding: 12px;
-        margin-bottom: 10px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: box-shadow 0.2s ease;
+    }
+    
+    .compact-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    
+    @media (max-width: 768px) {
+        .compact-card {
+            padding: 12px;
+            margin-bottom: 10px;
+        }
     }
     
     .compact-card-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 8px;
+        margin-bottom: 12px;
     }
     
     .compact-card-title {
-        font-size: 0.85rem;
+        font-size: 1rem;
         font-weight: 600;
         color: var(--gray-900);
     }
     
+    @media (max-width: 768px) {
+        .compact-card-title { font-size: 0.85rem; }
+    }
+    
     .tag-sm {
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 0.65rem;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.7rem;
         font-weight: 600;
         text-transform: uppercase;
+    }
+    
+    @media (max-width: 768px) {
+        .tag-sm {
+            padding: 2px 8px;
+            font-size: 0.65rem;
+        }
     }
     
     .tag-critical { background: #fef2f2; color: #dc2626; }
@@ -394,19 +432,29 @@ def get_weekly_trend(df, driver_id):
 # MAIN APP
 # ============================================================================
 def main():
-    # Data loading via expander (mobile friendly)
-    with st.expander("📁 Daten laden", expanded=False):
-        uploaded_file = st.file_uploader("CSV/Excel", type=['csv', 'xlsx', 'xls'], label_visibility="collapsed")
+    # Data loading via expander
+    with st.expander("📁 Daten laden", expanded=True):
+        uploaded_file = st.file_uploader("CSV/Excel hochladen", type=['csv', 'xlsx', 'xls'], label_visibility="collapsed")
         if uploaded_file:
             df = load_file_data(uploaded_file)
             if df is not None:
-                st.success(f"✓ {len(df)} Zeilen")
+                st.success(f"✓ {len(df)} Zeilen geladen")
         else:
-            df = load_sample_data()
-            st.caption("Demo-Daten aktiv")
+            df = None
     
+    # Empty state - no demo data
     if df is None:
-        st.error("Keine Daten")
+        st.markdown("""
+        <div style="text-align: center; padding: 60px 20px; background: white; border-radius: 12px; border: 2px dashed #e5e7eb; margin-top: 20px;">
+            <div style="font-size: 3rem; margin-bottom: 16px;">📊</div>
+            <h2 style="color: #374151; margin-bottom: 8px;">Willkommen bei LTS Quality Management</h2>
+            <p style="color: #6b7280; margin-bottom: 24px;">Lade deine Concession-Daten hoch, um zu starten.</p>
+            <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; display: inline-block; text-align: left;">
+                <p style="font-size: 0.85rem; color: #374151; margin: 0 0 8px 0;"><strong>Benötigte Spalten:</strong></p>
+                <code style="font-size: 0.75rem; color: #6b7280;">transporter_id, year_week, zip_code, Geo Distance > 25m, ...</code>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         return
     
     # Compact header
