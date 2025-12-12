@@ -2,21 +2,18 @@
 LTS Quality Management
 DNR Root Cause Analyse & Personalisiertes Fahrer-Coaching
 """
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
-
 # Page Configuration
 st.set_page_config(
     page_title="LTS Quality Management",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"  # Auto-collapse on mobile
 )
-
 # Professional CSS - Modern UI Best Practices
 st.markdown("""
 <style>
@@ -414,24 +411,243 @@ st.markdown("""
         background: var(--gray-50);
         border-color: var(--gray-400);
     }
+    
+    /* =====================================================
+       MOBILE RESPONSIVE STYLES
+       ===================================================== */
+    
+    /* Tablet and below */
+    @media (max-width: 992px) {
+        .page-title {
+            font-size: 1.5rem;
+        }
+        
+        .action-card {
+            padding: 16px;
+        }
+        
+        .metric-value {
+            font-size: 1.5rem;
+        }
+    }
+    
+    /* Mobile devices */
+    @media (max-width: 768px) {
+        /* Main container padding */
+        .main .block-container {
+            padding: 1rem 1rem !important;
+            max-width: 100% !important;
+        }
+        
+        /* Page header stacked */
+        .page-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        
+        .page-title {
+            font-size: 1.25rem;
+        }
+        
+        .page-subtitle {
+            font-size: 0.75rem;
+        }
+        
+        /* Stats badge full width on mobile */
+        .stats-badge {
+            padding: 6px 14px;
+            font-size: 0.75rem;
+        }
+        
+        /* Cards responsive */
+        .card, .action-card, .metric-card {
+            padding: 16px;
+            border-radius: 10px;
+        }
+        
+        .action-card-header {
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .action-card-title {
+            font-size: 0.9rem;
+        }
+        
+        .action-card-content {
+            font-size: 0.8rem;
+        }
+        
+        .action-card-content li {
+            margin: 6px 0;
+        }
+        
+        /* Metrics smaller on mobile */
+        .metric-value {
+            font-size: 1.25rem;
+        }
+        
+        .metric-label {
+            font-size: 0.65rem;
+        }
+        
+        /* Tags smaller */
+        .tag {
+            padding: 3px 8px;
+            font-size: 0.65rem;
+        }
+        
+        .badge {
+            padding: 4px 8px;
+            font-size: 0.7rem;
+        }
+        
+        /* Coaching container mobile */
+        .coaching-section {
+            padding: 16px;
+        }
+        
+        .coaching-driver-id {
+            font-size: 1rem;
+        }
+        
+        .coaching-section-content {
+            font-size: 0.85rem;
+        }
+        
+        .coaching-question {
+            padding-left: 12px;
+            font-size: 0.85rem;
+        }
+        
+        /* Tables scrollable */
+        [data-testid="stDataFrame"] {
+            overflow-x: auto !important;
+        }
+        
+        /* Sidebar collapsed by default on mobile - handled by Streamlit */
+        [data-testid="stSidebar"] {
+            min-width: 250px !important;
+        }
+        
+        [data-testid="stSidebar"] .brand {
+            padding: 16px;
+        }
+        
+        [data-testid="stSidebar"] .brand-title {
+            font-size: 1rem;
+        }
+        
+        /* Columns stack on mobile */
+        [data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+        
+        /* Selectbox full width */
+        .stSelectbox {
+            width: 100% !important;
+        }
+        
+        /* Expander padding */
+        .streamlit-expanderHeader {
+            font-size: 0.85rem !important;
+        }
+        
+        /* Download button */
+        .stDownloadButton button {
+            width: 100% !important;
+            padding: 12px !important;
+        }
+        
+        /* Alert boxes */
+        .alert {
+            padding: 12px 14px;
+            font-size: 0.85rem;
+        }
+        
+        /* Markdown text sizing */
+        h2 {
+            font-size: 1.25rem !important;
+        }
+        
+        h3 {
+            font-size: 1.1rem !important;
+        }
+        
+        h4 {
+            font-size: 1rem !important;
+        }
+        
+        p, li {
+            font-size: 0.9rem !important;
+        }
+    }
+    
+    /* Small phones */
+    @media (max-width: 480px) {
+        .main .block-container {
+            padding: 0.75rem 0.5rem !important;
+        }
+        
+        .page-title {
+            font-size: 1.1rem;
+        }
+        
+        .metric-value {
+            font-size: 1.1rem;
+        }
+        
+        .action-card {
+            padding: 12px;
+        }
+        
+        .coaching-section {
+            padding: 12px;
+        }
+        
+        .brand {
+            padding: 12px !important;
+        }
+    }
+    
+    /* Touch-friendly improvements */
+    @media (pointer: coarse) {
+        /* Larger touch targets */
+        .stRadio label {
+            min-height: 48px !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+        
+        .stSelectbox > div {
+            min-height: 48px !important;
+        }
+        
+        button {
+            min-height: 44px !important;
+            padding: 10px 16px !important;
+        }
+        
+        /* More spacing between interactive elements */
+        .stButton {
+            margin: 8px 0 !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
-
-
 # ============================================================================
 # DATA FUNCTIONS
 # ============================================================================
-
 def clean_column_names(df):
     df.columns = df.columns.str.strip().str.replace('\n', ' ').str.replace('\r', '')
     return df
-
 def convert_yn_to_numeric(df, columns):
     for col in columns:
         if col in df.columns:
             df[col] = df[col].apply(lambda x: 1 if str(x).upper().strip() in ['Y', 'YES', '1', 'TRUE'] else 0)
     return df
-
 def fill_missing_columns(df):
     defaults = {
         'Delivered to Safe Location': 0, 'Geo Distance > 25m': 0,
@@ -443,7 +659,6 @@ def fill_missing_columns(df):
         if col not in df.columns:
             df[col] = val
     return df
-
 def load_file_data(uploaded_file):
     filename = uploaded_file.name.lower()
     
@@ -475,7 +690,6 @@ def load_file_data(uploaded_file):
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
     return df
-
 def load_sample_data():
     import random
     random.seed(42)
@@ -503,12 +717,9 @@ def load_sample_data():
             'Delivered to Safe Location': 0
         })
     return pd.DataFrame(data)
-
-
 # ============================================================================
 # ANALYSIS FUNCTIONS
 # ============================================================================
-
 def get_driver_main_problem(driver_data):
     problems = {
         'Geo Distance / Group Stops': driver_data.get('Geo Distance > 25m', pd.Series([0])).sum(),
@@ -525,7 +736,6 @@ def get_driver_main_problem(driver_data):
             return 'Multiple Reasons', problems
     
     return (max(problems, key=problems.get), problems) if sum(problems.values()) > 0 else ('Sonstige', problems)
-
 def get_loss_buckets(df):
     return {
         'Household Member': int(df.get('Delivered to Household Member / Customer', pd.Series([0])).sum()),
@@ -534,13 +744,11 @@ def get_loss_buckets(df):
         'No Photo': int(df.get('Unattended Delivery & No Photo on Delivery', pd.Series([0])).sum()),
         'False Scan': int(df.get('Feedback False Scan Indicator', pd.Series([0])).sum()),
     }
-
 def get_weekly_trend(df, driver_id):
     if 'year_week' not in df.columns:
         return []
     weekly = df[df['transporter_id'] == driver_id].groupby('year_week').size().sort_index()
     return weekly.tolist()[-6:]
-
 def generate_coaching(df, driver_id):
     driver_data = df[df['transporter_id'] == driver_id]
     if driver_data.empty:
@@ -614,12 +822,9 @@ def generate_coaching(df, driver_id):
         coaching['commitment'] = "Follow-up in einer Woche."
     
     return coaching
-
-
 # ============================================================================
 # MAIN APP
 # ============================================================================
-
 def main():
     # Sidebar
     with st.sidebar:
@@ -1025,29 +1230,23 @@ Datum: {datetime.now().strftime('%d.%m.%Y %H:%M')}
 Fahrer: {c['driver_id']}
 Hauptproblem: {c['main_problem']}
 Tags: {', '.join(c['tags'])}
-
 FAKTEN
 ------
 - {c['total']} Concessions in {c['weeks']} Wochen
 - Trend: {c['trend']}
 - High-Value Items: {c['hv']}
-
 PROBLEM
 -------
 {c['problem']}
-
 COACHING FRAGEN
 ---------------
 {chr(10).join(f'- {q}' for q in c['questions'])}
-
 VEREINBARTE LÖSUNG
 ------------------
 {c['commitment']}
-
 MASSNAHMEN
 ----------
 {chr(10).join(actions)}
-
 Unterschrift Fahrer: ___________________
 Unterschrift Manager: ___________________
 """
@@ -1058,8 +1257,5 @@ Unterschrift Manager: ___________________
                     file_name=f"coaching_{c['driver_id']}_{datetime.now().strftime('%Y%m%d')}.txt",
                     mime="text/plain"
                 )
-
-
 if __name__ == "__main__":
     main()
-
