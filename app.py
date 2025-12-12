@@ -246,6 +246,85 @@ st.markdown("""
             gap: 12px;
         }
     }
+    
+    /* High Value Alert */
+    .hv-alert {
+        background: linear-gradient(135deg, #fce8e6 0%, #f8d7da 100%);
+        border-left: 4px solid #c5221f;
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+    }
+    
+    .hv-alert-title {
+        font-size: 1rem;
+        font-weight: 500;
+        color: #c5221f;
+        margin-bottom: 8px;
+    }
+    
+    .hv-alert-detail {
+        font-size: 0.875rem;
+        color: #5f6368;
+    }
+    
+    /* Time Analysis Card */
+    .time-card {
+        background: var(--gray-50);
+        padding: 16px;
+        border-radius: 8px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+    
+    .time-stat {
+        text-align: center;
+    }
+    
+    .time-stat-value {
+        font-size: 1.25rem;
+        font-weight: 500;
+        color: var(--google-blue);
+    }
+    
+    .time-stat-label {
+        font-size: 0.75rem;
+        color: var(--gray-700);
+        margin-top: 4px;
+    }
+    
+    /* Mismatch Detector */
+    .mismatch-card {
+        background: #fef7e0;
+        border-left: 4px solid #f9ab00;
+        padding: 12px 16px;
+        border-radius: 0 8px 8px 0;
+        margin-bottom: 8px;
+    }
+    
+    .mismatch-critical {
+        background: #fce8e6;
+        border-left-color: #c5221f;
+    }
+    
+    /* Concession Type Badge */
+    .type-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 16px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-right: 8px;
+        margin-bottom: 8px;
+    }
+    
+    .type-household { background: #e8f0fe; color: #1967d2; }
+    .type-mailslot { background: #e6f4ea; color: #137333; }
+    .type-neighbor { background: #fef7e0; color: #b06000; }
+    .type-receptionist { background: #f3e8fd; color: #7627bb; }
+    .type-safelocation { background: #fce8e6; color: #c5221f; }
 </style>
 """, unsafe_allow_html=True)
 # ============================================================================
@@ -295,6 +374,200 @@ def get_driver_problem(df):
 def get_trend(df, driver_id):
     if 'year_week' not in df.columns: return []
     return df[df['transporter_id'] == driver_id].groupby('year_week').size().sort_index().tolist()[-4:]
+def get_time_analysis(df, driver_id=None):
+    """Analyze delivery time patterns from timestamp columns."""
+    result = {
+        'peak_hour': None,
+        'peak_hour_pct': 0,
+        'peak_day': None,
+        'peak_day_pct': 0,
+        'days_since_last': None,
+        'hourly_dist': {},
+        'daily_dist': {}
+    }
+    
+    # Find timestamp column
+    time_cols = ['shipment_delivered_date', 'shipment_created_timestamp', 'delivered_date', 
+                 'delivery_timestamp', 'created_at', 'timestamp']
+    time_col = None
+    for col in time_cols:
+        if col in df.columns:
+            time_col = col
+            break
+    
+    if time_col is None:
+        return result
+    
+    # Filter by driver if specified
+    data = df[df['transporter_id'] == driver_id] if driver_id else df
+    if len(data) == 0:
+        return result
+    
+    try:
+        # Parse timestamps
+        timestamps = pd.to_datetime(data[time_col], errors='coerce')
+        valid_ts = timestamps.dropna()
+        
+        if len(valid_ts) == 0:
+            return result
+        
+        # Hourly distribution
+        hours = valid_ts.dt.hour
+        hourly_counts = hours.value_counts().sort_index()
+        result['hourly_dist'] = hourly_counts.to_dict()
+        
+        if len(hourly_counts) > 0:
+            peak_hour = hourly_counts.idxmax()
+            result['peak_hour'] = f"{peak_hour:02d}:00-{(peak_hour+1)%24:02d}:00"
+            result['peak_hour_pct'] = (hourly_counts.max() / len(valid_ts)) * 100
+        
+        # Daily distribution (weekday)
+        days = valid_ts.dt.dayofweek
+        day_names = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
+        daily_counts = days.value_counts().sort_index()
+        result['daily_dist'] = {day_names[i]: c for i, c in daily_counts.items()}
+        
+        if len(daily_counts) > 0:
+            peak_day_idx = daily_counts.idxmax()
+            result['peak_day'] = day_names[peak_day_idx]
+            result['peak_day_pct'] = (daily_counts.max() / len(valid_ts)) * 100
+        
+        # Days since last incident
+        latest = valid_ts.max()
+        result['days_since_last'] = (datetime.now() - latest).days
+        
+    except Exception:
+        pass
+    
+    return result
+def detect_mailbox_mismatches(df):
+    """Detect suspicious booking patterns."""
+    mismatches = []
+    
+    # Type 1: Mailbox-eligible marked as Household
+    # Check for Delivery Preference Type or similar columns
+    pref_cols = ['Delivery Preference Type', 'delivery_preference', 'pref_type']
+    pref_col = None
+    for col in pref_cols:
+        if col in df.columns:
+            pref_col = col
+            break
+    
+    household_col = 'Delivered to Household Member / Customer'
+    
+    if pref_col and household_col in df.columns:
+        # Find where preference is mailslot/mailbox but marked as household
+        mailbox_keywords = ['mailslot', 'mailbox', 'briefkasten', 'postfach']
+        for idx, row in df.iterrows():
+            pref_val = str(row.get(pref_col, '')).lower()
+            is_mailbox_pref = any(kw in pref_val for kw in mailbox_keywords)
+            is_household = row.get(household_col, 0) == 1
+            
+            if is_mailbox_pref and is_household:
+                mismatches.append({
+                    'tracking_id': row.get('tracking_id', 'Unknown'),
+                    'transporter_id': row.get('transporter_id', 'Unknown'),
+                    'mismatch_type': 'Briefkasten als Household',
+                    'severity': 'warning',
+                    'detail': f"Präferenz: {row.get(pref_col, 'N/A')}"
+                })
+    
+    # Type 2: Safe Location without photo
+    no_photo_col = 'Unattended Delivery & No Photo on Delivery'
+    if no_photo_col in df.columns:
+        no_photo_df = df[df[no_photo_col] == 1]
+        for idx, row in no_photo_df.iterrows():
+            mismatches.append({
+                'tracking_id': row.get('tracking_id', 'Unknown'),
+                'transporter_id': row.get('transporter_id', 'Unknown'),
+                'mismatch_type': 'Safe Location ohne Foto',
+                'severity': 'critical',
+                'detail': f"PLZ: {row.get('zip_code', 'N/A')}"
+            })
+    
+    return pd.DataFrame(mismatches) if mismatches else pd.DataFrame()
+def get_concession_type_distribution(df):
+    """Get distribution of concession/delivery types."""
+    types = {
+        'Household Member': 0,
+        'Mailslot': 0,
+        'Neighbor': 0,
+        'Receptionist': 0,
+        'Safe Location': 0,
+        'Other': 0
+    }
+    
+    # Check for explicit type column
+    type_cols = ['Delivered to Type', 'Concession_type_of_delivery', 'delivery_type', 'concession_type']
+    type_col = None
+    for col in type_cols:
+        if col in df.columns:
+            type_col = col
+            break
+    
+    if type_col:
+        # Use explicit type column
+        type_counts = df[type_col].value_counts()
+        for t, c in type_counts.items():
+            t_lower = str(t).lower()
+            if 'household' in t_lower or 'member' in t_lower:
+                types['Household Member'] += c
+            elif 'mail' in t_lower or 'slot' in t_lower or 'brief' in t_lower:
+                types['Mailslot'] += c
+            elif 'neighbor' in t_lower or 'nachbar' in t_lower:
+                types['Neighbor'] += c
+            elif 'recep' in t_lower or 'empfang' in t_lower:
+                types['Receptionist'] += c
+            elif 'safe' in t_lower or 'ablage' in t_lower:
+                types['Safe Location'] += c
+            else:
+                types['Other'] += c
+    else:
+        # Derive from existing flags
+        if 'Delivered to Household Member / Customer' in df.columns:
+            types['Household Member'] = int(df['Delivered to Household Member / Customer'].sum())
+        if 'Unattended Delivery & No Photo on Delivery' in df.columns:
+            types['Safe Location'] = int(df['Unattended Delivery & No Photo on Delivery'].sum())
+        # Remaining go to Other
+        total_flags = types['Household Member'] + types['Safe Location']
+        types['Other'] = max(0, len(df) - total_flags)
+    
+    return {k: v for k, v in types.items() if v > 0}
+def get_high_value_summary(df):
+    """Get summary of high-value item concessions."""
+    hv_col = 'High Value Item (Y/N)'
+    cost_col = 'Concession Cost'
+    
+    if hv_col not in df.columns:
+        return {'total_count': 0, 'total_cost': 0, 'by_driver': [], 'records': pd.DataFrame()}
+    
+    hv_df = df[df[hv_col] == 1]
+    
+    if len(hv_df) == 0:
+        return {'total_count': 0, 'total_cost': 0, 'by_driver': [], 'records': pd.DataFrame()}
+    
+    total_count = len(hv_df)
+    total_cost = hv_df[cost_col].sum() if cost_col in hv_df.columns else 0
+    
+    # Group by driver
+    by_driver = []
+    driver_groups = hv_df.groupby('transporter_id')
+    for driver_id, group in driver_groups:
+        driver_cost = group[cost_col].sum() if cost_col in group.columns else 0
+        by_driver.append({
+            'transporter_id': driver_id,
+            'count': len(group),
+            'cost': driver_cost
+        })
+    
+    by_driver = sorted(by_driver, key=lambda x: x['count'], reverse=True)
+    
+    return {
+        'total_count': total_count,
+        'total_cost': total_cost,
+        'by_driver': by_driver[:5],  # Top 5
+        'records': hv_df
+    }
 # ============================================================================
 # MAIN
 # ============================================================================
@@ -367,6 +640,73 @@ def main():
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+        
+        # --- HIGH VALUE ALERT ---
+        hv_summary = get_high_value_summary(df)
+        if hv_summary['total_count'] > 0:
+            st.markdown("---")
+            top_driver = hv_summary['by_driver'][0] if hv_summary['by_driver'] else None
+            top_info = f"Top-Fahrer: {top_driver['transporter_id']} ({top_driver['count']} Fälle)" if top_driver else ""
+            
+            st.markdown(f"""
+            <div class="hv-alert">
+                <div class="hv-alert-title">⚠️ {hv_summary['total_count']} High-Value Concessions</div>
+                <div class="hv-alert-detail">
+                    {top_info} | Gesamt: €{hv_summary['total_cost']:,.2f}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            with st.expander("High-Value Details anzeigen"):
+                hv_table = []
+                for d in hv_summary['by_driver']:
+                    hv_table.append({
+                        'Fahrer': d['transporter_id'],
+                        'Anzahl': d['count'],
+                        'Kosten': f"€{d['cost']:,.2f}"
+                    })
+                if hv_table:
+                    st.dataframe(pd.DataFrame(hv_table), use_container_width=True, hide_index=True)
+        
+        # --- CONCESSION TYPE DISTRIBUTION ---
+        st.markdown("---")
+        st.markdown("### 📊 Zustellart-Verteilung")
+        
+        type_dist = get_concession_type_distribution(df)
+        if type_dist:
+            # Create horizontal bar chart
+            type_df = pd.DataFrame([
+                {'Typ': k, 'Anzahl': v} for k, v in sorted(type_dist.items(), key=lambda x: x[1], reverse=True)
+            ])
+            
+            fig = px.bar(type_df, x='Anzahl', y='Typ', orientation='h', text='Anzahl',
+                        color='Typ', color_discrete_sequence=['#1a73e8', '#34a853', '#fbbc04', '#ea4335', '#9aa0a6', '#5f6368'])
+            fig.update_traces(textposition='outside')
+            fig.update_layout(
+                plot_bgcolor='white',
+                margin=dict(t=10, l=0, r=40, b=0),
+                xaxis=dict(showgrid=True, gridcolor='#f1f3f4', title=None),
+                yaxis=dict(showgrid=False, title=None),
+                showlegend=False,
+                height=max(150, len(type_dist) * 40)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Type badges
+            badge_html = ""
+            type_classes = {
+                'Household Member': 'type-household',
+                'Mailslot': 'type-mailslot',
+                'Neighbor': 'type-neighbor',
+                'Receptionist': 'type-receptionist',
+                'Safe Location': 'type-safelocation'
+            }
+            for t, c in type_dist.items():
+                badge_class = type_classes.get(t, '')
+                badge_html += f'<span class="type-badge {badge_class}">{t}: {c}</span>'
+            st.markdown(f'<div style="margin-top: 8px;">{badge_html}</div>', unsafe_allow_html=True)
+        else:
+            st.info("Keine Zustellart-Daten verfügbar.")
     # 2. DRIVERS (People-first)
     with tab_drivers:
         searched = st.text_input("Find driver", placeholder="Search ID...", label_visibility="collapsed")
@@ -422,6 +762,45 @@ def main():
                     <span style="font-weight:500;">{c}</span>
                 </div>
                 """, unsafe_allow_html=True)
+        
+        # --- MISMATCH DETECTOR ---
+        st.markdown("---")
+        st.markdown("### 🔍 Mismatch-Erkennung")
+        
+        mismatches = detect_mailbox_mismatches(df)
+        if len(mismatches) > 0:
+            # Summary counts
+            critical_count = len(mismatches[mismatches['severity'] == 'critical']) if 'severity' in mismatches.columns else 0
+            warning_count = len(mismatches[mismatches['severity'] == 'warning']) if 'severity' in mismatches.columns else 0
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if critical_count > 0:
+                    st.markdown(f"""
+                    <div class="mismatch-card mismatch-critical">
+                        <strong>🚨 {critical_count} Kritische Mismatches</strong><br>
+                        <span style="font-size: 0.875rem;">Safe Location ohne Foto</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            with col2:
+                if warning_count > 0:
+                    st.markdown(f"""
+                    <div class="mismatch-card">
+                        <strong>⚠️ {warning_count} Warnungen</strong><br>
+                        <span style="font-size: 0.875rem;">Briefkasten als Household</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            with st.expander(f"Alle {len(mismatches)} Mismatches anzeigen"):
+                # Group by type
+                for mtype in mismatches['mismatch_type'].unique():
+                    type_df = mismatches[mismatches['mismatch_type'] == mtype]
+                    st.markdown(f"**{mtype}** ({len(type_df)} Fälle)")
+                    display_cols = ['transporter_id', 'tracking_id', 'detail']
+                    available_cols = [c for c in display_cols if c in type_df.columns]
+                    st.dataframe(type_df[available_cols].head(20), use_container_width=True, hide_index=True)
+        else:
+            st.success("✓ Keine verdächtigen Muster erkannt")
     # 4. ACTIONS (Coaching)
     with tab_actions:
         # Build driver list with details for dropdown
@@ -709,6 +1088,46 @@ Manager: ________________________ Datum: _________
                     for z, c in zc.items():
                         pct = (c / total) * 100
                         st.markdown(f"**{z}**: {c} Fälle ({pct:.0f}%)")
+                
+                # --- TIME ANALYSIS ---
+                st.markdown("### ⏰ Zeitanalyse")
+                time_data = get_time_analysis(df, sel_driver)
+                
+                if time_data['peak_hour'] or time_data['peak_day']:
+                    st.markdown(f"""
+                    <div class="time-card">
+                        <div class="time-stat">
+                            <div class="time-stat-value">{time_data['peak_hour'] or '—'}</div>
+                            <div class="time-stat-label">Peak-Stunde ({time_data['peak_hour_pct']:.0f}%)</div>
+                        </div>
+                        <div class="time-stat">
+                            <div class="time-stat-value">{time_data['peak_day'] or '—'}</div>
+                            <div class="time-stat-label">Risiko-Tag ({time_data['peak_day_pct']:.0f}%)</div>
+                        </div>
+                        <div class="time-stat">
+                            <div class="time-stat-value">{time_data['days_since_last'] if time_data['days_since_last'] is not None else '—'}</div>
+                            <div class="time-stat-label">Tage seit letztem</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Hourly distribution chart if data exists
+                    if time_data['hourly_dist']:
+                        hourly_df = pd.DataFrame([
+                            {'Stunde': f"{h:02d}:00", 'Anzahl': c} 
+                            for h, c in sorted(time_data['hourly_dist'].items())
+                        ])
+                        fig = px.bar(hourly_df, x='Stunde', y='Anzahl', text='Anzahl')
+                        fig.update_traces(marker_color='#1a73e8', textposition='outside')
+                        fig.update_layout(
+                            plot_bgcolor='white', height=180,
+                            margin=dict(t=10, l=0, r=0, b=0),
+                            xaxis=dict(showgrid=False, title=None),
+                            yaxis=dict(showgrid=True, gridcolor='#f1f3f4', title=None, showticklabels=False)
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("Keine Zeitstempel-Daten verfügbar für Zeitanalyse.")
                 
                 # Weekly trend
                 st.markdown("### Wöchentlicher Verlauf")
