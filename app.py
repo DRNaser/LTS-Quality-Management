@@ -475,9 +475,12 @@ def main():
     # TAB 1: ROADMAP
     # ========================================================================
     with tab1:
-        buckets = get_loss_buckets(df)
-        sorted_b = sorted(buckets.items(), key=lambda x: x[1], reverse=True)[:3]
-        
+       # Compact header
+    weeks = sorted([str(w) for w in df['year_week'].unique()]) if 'year_week' in df.columns else []
+    try:
+        week_range = f"KW{str(weeks[0]).split('-')[1]}-{str(weeks[-1]).split('-')[1]}" if weeks and '-' in str(weeks[0]) else ""
+    except:
+        week_range = ""
         actions = [
             {"tag": "SOFORT", "tag_class": "tag-critical", 
              "content": ["Standup-Briefing", "'Household' nur bei Übergabe", "POD Umgehung = Warnung"]},
@@ -685,3 +688,4 @@ Commit: {commit}
             st.download_button("📥 Protokoll", protocol, f"coaching_{sel[:8]}.txt")
 if __name__ == "__main__":
     main()
+
