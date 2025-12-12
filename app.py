@@ -424,14 +424,47 @@ def main():
                 """, unsafe_allow_html=True)
     # 4. ACTIONS (Coaching)
     with tab_actions:
-        # Driver Selection
-        opts = sorted(df['transporter_id'].unique().tolist())
-        sel_driver = st.selectbox("Select Driver", opts, label_visibility="collapsed")
+        # Build driver list with details for dropdown
+        driver_opts = []
+        for did in df['transporter_id'].unique():
+            dd = df[df['transporter_id'] == did]
+            mp, _ = get_driver_problem(dd)
+            cnt = len(dd)
+            # Risk status
+            if cnt > 10:
+                status = "🔴"
+                risk = "Critical"
+            elif cnt > 5:
+                status = "🟠"
+                risk = "At Risk"
+            else:
+                status = "🟢"
+                risk = "Monitor"
+            driver_opts.append({
+                'id': did,
+                'count': cnt,
+                'problem': mp,
+                'status': status,
+                'risk': risk,
+                'label': f"{status} {did} · {cnt} concessions · {mp}"
+            })
+        driver_opts = sorted(driver_opts, key=lambda x: x['count'], reverse=True)
+        
+        # Driver Selection with details
+        sel_driver = st.selectbox(
+            "Select Driver",
+            options=[d['id'] for d in driver_opts],
+            format_func=lambda x: next((d['label'] for d in driver_opts if d['id'] == x), x),
+            label_visibility="collapsed"
+        )
         
         if sel_driver:
             dd = df[df['transporter_id'] == sel_driver]
-            mp, counts = get_driver_problem(dd)
-            total = len(dd)
+            driver_info = next((d for d in driver_opts if d['id'] == sel_driver), None)
+            mp = driver_info['problem'] if driver_info else "Unknown"
+            total = driver_info['count'] if driver_info else len(dd)
+            status = driver_info['status'] if driver_info else ""
+            risk = driver_info['risk'] if driver_info else ""
             
             # -- Driver Header Card --
             st.markdown(f"""
