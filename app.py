@@ -371,33 +371,6 @@ def load_file_data(uploaded_file):
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
     return df
-def load_sample_data():
-    import random
-    random.seed(42)
-    drivers = ['A1B23M63H4GRJ1', 'A1CE94XEF8Q4IW', 'A1A5TD0FB57T8D', 'A1HA4BWI34PE6T', 
-               'A12VULCF9QV1FE', 'A1IQSLQOLKOZ0A', 'A12MTTC6P68FMV', 'A1XYZ123ABC']
-    zips = ['5020', '5400', '5021', '5082', '5071']
-    weeks = ['2025-44', '2025-45', '2025-46', '2025-47', '2025-48', '2025-49']
-    
-    data = []
-    for _ in range(218):
-        driver = random.choice(drivers)
-        data.append({
-            'year_week': random.choice(weeks),
-            'transporter_id': driver,
-            'zip_code': random.choice(zips),
-            'tracking_id': f'TRK{random.randint(100000, 999999)}',
-            'Concession Cost': round(random.uniform(5, 80), 2),
-            'High Value Item (Y/N)': random.choice([0]*4 + [1]),
-            'Geo Distance > 25m': random.choice([0]*3 + [1]) if driver in ['A1B23M63H4GRJ1', 'A12MTTC6P68FMV'] else 0,
-            'Delivered to Household Member / Customer': random.choice([0, 0, 1]) if driver in ['A1A5TD0FB57T8D', 'A12VULCF9QV1FE'] else 0,
-            'Delivery preferences not followed': random.choice([0]*3 + [1]) if driver == 'A1CE94XEF8Q4IW' else 0,
-            'Feedback False Scan Indicator': 1 if driver == 'A1A5TD0FB57T8D' and random.random() > 0.85 else 0,
-            'Unattended Delivery & No Photo on Delivery': random.choice([0, 0, 1]),
-            'Attended DNR Deliveries': random.choice([0, 1]),
-            'Delivered to Safe Location': 0
-        })
-    return pd.DataFrame(data)
 # ============================================================================
 # ANALYSIS FUNCTIONS
 # ============================================================================
@@ -458,8 +431,11 @@ def main():
         return
     
     # Compact header
-    weeks = sorted(df['year_week'].unique()) if 'year_week' in df.columns else []
-    week_range = f"KW{weeks[0].split('-')[1]}-{weeks[-1].split('-')[1]}" if weeks else ""
+    weeks = sorted([str(w) for w in df['year_week'].unique()]) if 'year_week' in df.columns else []
+    try:
+        week_range = f"KW{str(weeks[0]).split('-')[1]}-{str(weeks[-1]).split('-')[1]}" if weeks and '-' in str(weeks[0]) else ""
+    except:
+        week_range = ""
     
     st.markdown(f"""
     <div class="app-header">
@@ -475,12 +451,9 @@ def main():
     # TAB 1: ROADMAP
     # ========================================================================
     with tab1:
-       # Compact header
-    weeks = sorted([str(w) for w in df['year_week'].unique()]) if 'year_week' in df.columns else []
-    try:
-        week_range = f"KW{str(weeks[0]).split('-')[1]}-{str(weeks[-1]).split('-')[1]}" if weeks and '-' in str(weeks[0]) else ""
-    except:
-        week_range = ""
+        buckets = get_loss_buckets(df)
+        sorted_b = sorted(buckets.items(), key=lambda x: x[1], reverse=True)[:3]
+        
         actions = [
             {"tag": "SOFORT", "tag_class": "tag-critical", 
              "content": ["Standup-Briefing", "'Household' nur bei Übergabe", "POD Umgehung = Warnung"]},
@@ -688,4 +661,3 @@ Commit: {commit}
             st.download_button("📥 Protokoll", protocol, f"coaching_{sel[:8]}.txt")
 if __name__ == "__main__":
     main()
-
