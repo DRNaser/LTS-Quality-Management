@@ -1189,6 +1189,130 @@ def get_executive_summary(df):
     
     return summary
 # ============================================================================
+# ENHANCEMENT FEATURES
+# ============================================================================
+def export_analysis_to_excel(df):
+    """Export all analyses to Excel file with multiple sheets."""
+    from io import BytesIO
+    
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Raw Data
+        df.to_excel(writer, sheet_name='Raw Data', index=False)
+        
+        # Driver Summary
+        driver_summary = []
+        for did in df['transporter_id'].unique():
+            dd = df[df['transporter_id'] == did]
+            stats = get_driver_enhanced_stats(df, did)
+            mp, counts = get_driver_problem(dd)
+            driver_summary.append({
+                'Driver ID': did,
+                'Concessions': len(dd),
+                'Cost (€)': stats['total_cost'],
+                'Main Problem': mp,
+                'Trend': stats['trend_direction'],
+                'Repeat Offender': 'Yes' if stats['is_repeat_offender'] else 'No',
+                'Misbookings': int(stats['dimension_misbookings']),
+                'Contact Rate': f"{stats['contact_success_rate']:.0f}%"
+            })
+        pd.DataFrame(driver_summary).to_excel(writer, sheet_name='Driver Summary', index=False)
+        
+        # ZIP Analysis
+        zip_risks = get_zip_risk_scores(df)
+        pd.DataFrame(zip_risks).to_excel(writer, sheet_name='ZIP Risk', index=False)
+        
+        # Mismatches
+        mismatches = detect_oversized_mailbox_packages(df)
+        if len(mismatches) > 0:
+            mismatches.to_excel(writer, sheet_name='Misbookings', index=False)
+        
+        # Executive Summary
+        exec_sum = get_executive_summary(df)
+        summary_data = {
+            'Metric': ['Total Concessions', 'Total Cost', 'Total Drivers', 'Avg per Driver', 
+                      'Top Issue', 'Critical Drivers', 'Risk Score'],
+            'Value': [exec_sum['total_concessions'], f"€{exec_sum['total_cost']:,.0f}", 
+                     exec_sum['total_drivers'], f"{exec_sum['avg_per_driver']:.1f}",
+                     exec_sum['top_issue'], exec_sum['critical_drivers'], exec_sum['risk_score']]
+        }
+        pd.DataFrame(summary_data).to_excel(writer, sheet_name='Executive Summary', index=False)
+    
+    return output.getvalue()
+def get_leaderboard(df, top_n=10):
+    """Get leaderboard with best and worst performers."""
+    drivers = []
+    for did in df['transporter_id'].unique():
+        dd = df[df['transporter_id'] == did]
+        stats = get_driver_enhanced_stats(df, did)
+        mp, _ = get_driver_problem(dd)
+        drivers.append({
+            'id': did,
+            'count': len(dd),
+            'cost': stats['total_cost'],
+            'problem': mp,
+            'trend': stats['trend_direction'],
+            'trend_change': stats['trend_change'],
+            'is_repeat': stats['is_repeat_offender']
+        })
+    
+    sorted_drivers = sorted(drivers, key=lambda x: x['count'])
+    
+    return {
+        'best': sorted_drivers[:top_n],  # Lowest concessions = best
+        'worst': sorted_drivers[-top_n:][::-1]  # Highest concessions = worst
+    }
+def get_benchmark_stats(df):
+    """Calculate team-wide benchmark statistics."""
+    total_drivers = df['transporter_id'].nunique()
+    total_concessions = len(df)
+    
+    # Calculate averages
+    avg_per_driver = total_concessions / total_drivers if total_drivers > 0 else 0
+    
+    # Cost benchmarks
+    total_cost = df['Concession Cost'].sum() if 'Concession Cost' in df.columns else 0
+    avg_cost_per_driver = total_cost / total_drivers if total_drivers > 0 else 0
+    
+    # Issue breakdown averages
+    issue_avgs = {}
+    issue_cols = {
+        'Geo': 'Geo Distance > 25m',
+        'Household': 'Delivered to Household Member / Customer',
+        'Präferenz': 'Delivery preferences not followed',
+        'Kein Foto': 'Unattended Delivery & No Photo on Delivery'
+    }
+    for label, col in issue_cols.items():
+        if col in df.columns:
+            total = df[col].sum()
+            issue_avgs[label] = total / total_drivers if total_drivers > 0 else 0
+    
+    # Percentile thresholds
+    driver_counts = df.groupby('transporter_id').size()
+    
+    return {
+        'avg_concessions': avg_per_driver,
+        'avg_cost': avg_cost_per_driver,
+        'median_concessions': driver_counts.median(),
+        'p75': driver_counts.quantile(0.75),
+        'p90': driver_counts.quantile(0.90),
+        'issue_avgs': issue_avgs,
+        'total_drivers': total_drivers,
+        'total_concessions': total_concessions,
+        'total_cost': total_cost
+    }
+# Session notes storage (uses Streamlit session state)
+def get_driver_notes(driver_id):
+    """Get notes for a driver from session state."""
+    if 'driver_notes' not in st.session_state:
+        st.session_state.driver_notes = {}
+    return st.session_state.driver_notes.get(driver_id, '')
+def save_driver_notes(driver_id, notes):
+    """Save notes for a driver to session state."""
+    if 'driver_notes' not in st.session_state:
+        st.session_state.driver_notes = {}
+    st.session_state.driver_notes[driver_id] = notes
+# ============================================================================
 # MAIN
 # ============================================================================
 def main():
@@ -1327,6 +1451,85 @@ def main():
             st.markdown(f'<div style="margin-top: 8px;">{badge_html}</div>', unsafe_allow_html=True)
         else:
             st.info("Keine Zustellart-Daten verfügbar.")
+        
+        # --- LEADERBOARD ---
+        st.markdown("---")
+        st.markdown("### 🏆 Leaderboard")
+        
+        leaderboard = get_leaderboard(df, top_n=5)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**✅ Beste Fahrer** (wenigste Concessions)")
+            for i, d in enumerate(leaderboard['best'][:5], 1):
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+                trend_icon = f"<span style='color:#137333'>{d['trend']}</span>" if d['trend'] == '↓' else f"<span style='color:#c5221f'>{d['trend']}</span>" if d['trend'] == '↑' else d['trend']
+                st.markdown(f"""
+                <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f3f4;">
+                    <span>{medal} {d['id'][:12]}...</span>
+                    <span><strong>{d['count']}</strong> {trend_icon}</span>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown("**⚠️ Kritische Fahrer** (meiste Concessions)")
+            for i, d in enumerate(leaderboard['worst'][:5], 1):
+                repeat_badge = "🔁" if d['is_repeat'] else ""
+                trend_icon = f"<span style='color:#137333'>{d['trend']}</span>" if d['trend'] == '↓' else f"<span style='color:#c5221f'>{d['trend']}</span>" if d['trend'] == '↑' else d['trend']
+                st.markdown(f"""
+                <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f3f4;">
+                    <span>{i}. {d['id'][:12]}... {repeat_badge}</span>
+                    <span><strong style="color:#c5221f">{d['count']}</strong> {trend_icon}</span>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # --- BENCHMARK ---
+        st.markdown("---")
+        st.markdown("### 📊 Team Benchmark")
+        
+        benchmark = get_benchmark_stats(df)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Ø Concessions", f"{benchmark['avg_concessions']:.1f}")
+        with col2:
+            st.metric("Median", f"{benchmark['median_concessions']:.0f}")
+        with col3:
+            st.metric("P75", f"{benchmark['p75']:.0f}")
+        with col4:
+            st.metric("Ø Kosten", f"€{benchmark['avg_cost']:.0f}")
+        
+        # Issue averages
+        if benchmark['issue_avgs']:
+            st.markdown("**Ø Probleme pro Fahrer:**")
+            issue_cols = st.columns(len(benchmark['issue_avgs']))
+            for i, (issue, avg) in enumerate(benchmark['issue_avgs'].items()):
+                with issue_cols[i]:
+                    st.markdown(f"<div style='text-align:center'><div style='font-size:1.25rem; font-weight:500'>{avg:.1f}</div><div style='font-size:0.75rem; color:#5f6368'>{issue}</div></div>", unsafe_allow_html=True)
+        
+        # --- EXPORT ---
+        st.markdown("---")
+        st.markdown("### 📤 Export")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            excel_data = export_analysis_to_excel(df)
+            st.download_button(
+                label="📊 Excel-Report herunterladen",
+                data=excel_data,
+                file_name=f"concession_analysis_{week_range.replace(' ', '_')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        with col2:
+            # CSV quick export
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📄 Rohdaten (CSV)",
+                data=csv,
+                file_name=f"raw_data_{week_range.replace(' ', '_')}.csv",
+                mime="text/csv"
+            )
+        
     # 2. DRIVERS (People-first) - ENHANCED
     with tab_drivers:
         searched = st.text_input("Find driver", placeholder="Search ID...", label_visibility="collapsed")
@@ -2238,6 +2441,26 @@ Fahrer: _________________________ Datum: _________
 Manager: ________________________ Datum: _________
 """
                     st.download_button("📥 Protokoll herunterladen", protocol, f"coaching_{sel_driver[:10]}.txt", width='stretch')
+                
+                # --- COACHING NOTES ---
+                st.markdown("---")
+                st.markdown("### 📝 Coaching-Notizen")
+                
+                current_notes = get_driver_notes(sel_driver)
+                notes = st.text_area(
+                    "Notizen zu diesem Fahrer",
+                    value=current_notes,
+                    height=100,
+                    placeholder="Notizen zum Coaching-Gespräch, Follow-up Aktionen, etc...",
+                    key=f"notes_{sel_driver}"
+                )
+                
+                if notes != current_notes:
+                    save_driver_notes(sel_driver, notes)
+                    st.success("✓ Notizen gespeichert (Session)")
+                
+                if current_notes:
+                    st.markdown(f"<div style='font-size: 0.75rem; color: #5f6368;'>Letzte Notiz: {len(current_notes)} Zeichen</div>", unsafe_allow_html=True)
             
             with subtab_details:
                 st.markdown("### Problemaufschlüsselung")
