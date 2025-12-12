@@ -1,883 +1,490 @@
 """
 LTS Quality Management
-DNR Root Cause Analyse & Personalisiertes Fahrer-Coaching
-Mobile-First Responsive Design
+Google-DNA Design & Behavioral Coaching
 """
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
-# Page Configuration - Mobile optimized
+# Page Configuration
 st.set_page_config(
     page_title="LTS Quality",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="collapsed"  # Always collapsed on load
+    initial_sidebar_state="collapsed"
 )
-# Mobile-First CSS
+# Google-DNA CSS
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
     
     :root {
-        --primary: #2563eb;
-        --danger: #ef4444;
-        --success: #10b981;
-        --warning: #f59e0b;
-        --gray-50: #f9fafb;
-        --gray-100: #f3f4f6;
-        --gray-200: #e5e7eb;
-        --gray-500: #6b7280;
-        --gray-700: #374151;
-        --gray-900: #111827;
+        --google-blue: #1a73e8;
+        --google-blue-hover: #1557b0;
+        --google-red: #d93025;
+        --google-green: #1e8e3d;
+        --google-yellow: #f9ab00;
+        --gray-50: #f8f9fa;
+        --gray-100: #f1f3f4;
+        --gray-200: #e8eaed;
+        --gray-300: #dadce0;
+        --gray-500: #9aa0a6;
+        --gray-700: #5f6368;
+        --gray-900: #202124;
+        --font-stack: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
-    * { font-family: 'Inter', sans-serif; }
+    html, body, [class*="css"] {
+        font-family: var(--font-stack);
+        color: var(--gray-900);
+    }
     
-    /* Hide defaults */
+    .stApp {
+        background-color: white;
+    }
+    
+    /* Header Navigation */
+    header[data-testid="stHeader"] {
+        background: white;
+        border-bottom: 1px solid var(--gray-200);
+        height: 60px;
+    }
+    
     #MainMenu, footer, .stDeployButton { display: none; }
-    header[data-testid="stHeader"] { background: transparent; }
     
-    /* Main container - responsive */
     .main .block-container {
-        padding: 1.5rem 2rem !important;
-        max-width: 1200px !important;
+        padding: 2rem 1rem;
+        max-width: 1000px;
+        margin: 0 auto;
     }
-    
-    @media (max-width: 768px) {
-        .main .block-container {
-            padding: 0.5rem 0.75rem !important;
-            max-width: 100% !important;
-        }
-        [data-testid="stSidebar"] {
-            display: none !important;
-        }
-        [data-testid="stSidebarCollapsedControl"] {
-            display: none !important;
-        }
-    }
-    
-    /* Header - responsive */
-    .app-header {
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        color: white;
-        padding: 16px 24px;
-        border-radius: 12px;
-        margin-bottom: 20px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-    }
-    
-    @media (max-width: 768px) {
-        .app-header {
-            padding: 12px 16px;
-            margin-bottom: 12px;
-        }
-    }
-    
-    .app-title {
-        font-size: 1.25rem;
-        font-weight: 700;
-        margin: 0;
-    }
-    
-    @media (max-width: 768px) {
-        .app-title { font-size: 1rem; }
-    }
-    
-    .app-stat {
-        background: rgba(239, 68, 68, 0.2);
-        color: #fca5a5;
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-    
-    /* Cards - responsive */
-    .compact-card {
-        background: white;
-        border-radius: 12px;
-        border: 1px solid var(--gray-200);
-        padding: 20px;
-        margin-bottom: 16px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        transition: box-shadow 0.2s ease;
-    }
-    
-    .compact-card:hover {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-    }
-    
-    @media (max-width: 768px) {
-        .compact-card {
-            padding: 12px;
-            margin-bottom: 10px;
-        }
-    }
-    
-    .compact-card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 12px;
-    }
-    
-    .compact-card-title {
-        font-size: 1rem;
-        font-weight: 600;
-        color: var(--gray-900);
-    }
-    
-    @media (max-width: 768px) {
-        .compact-card-title { font-size: 0.85rem; }
-    }
-    
-    .tag-sm {
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 0.7rem;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-    
-    @media (max-width: 768px) {
-        .tag-sm {
-            padding: 2px 8px;
-            font-size: 0.65rem;
-        }
-    }
-    
-    .tag-critical { background: #fef2f2; color: #dc2626; }
-    .tag-info { background: #eff6ff; color: #2563eb; }
-    .tag-low { background: #f0fdf4; color: #16a34a; }
-    
-    .compact-card-stat {
-        font-size: 0.7rem;
-        color: var(--gray-500);
-        margin-bottom: 8px;
-    }
-    
-    .compact-card-list {
-        margin: 0;
-        padding-left: 16px;
-        font-size: 0.75rem;
-        color: var(--gray-700);
-    }
-    
-    .compact-card-list li {
-        margin: 4px 0;
-    }
-    
-    /* Driver row compact */
-    .driver-row {
-        background: white;
-        border-radius: 8px;
-        padding: 10px 12px;
-        margin-bottom: 8px;
-        border: 1px solid var(--gray-200);
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-    
-    .driver-row-top {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    
-    .driver-id {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: var(--gray-900);
-        font-family: monospace;
-    }
-    
-    .driver-count {
-        font-size: 0.7rem;
-        color: var(--danger);
-        font-weight: 600;
-    }
-    
-    .driver-badge {
-        display: inline-block;
-        padding: 3px 8px;
-        border-radius: 4px;
-        font-size: 0.65rem;
-        font-weight: 500;
-    }
-    
-    .badge-household { background: #fff7ed; color: #ea580c; }
-    .badge-geo { background: #fef2f2; color: #dc2626; }
-    .badge-prefs { background: #eff6ff; color: #2563eb; }
-    .badge-multiple { background: #faf5ff; color: #7c3aed; }
-    
-    /* Coaching compact */
-    .coaching-box {
-        background: white;
-        border-radius: 10px;
-        border: 1px solid var(--gray-200);
-        overflow: hidden;
-    }
-    
-    .coaching-header {
-        background: var(--primary);
-        color: white;
-        padding: 12px;
-        font-weight: 600;
-        font-size: 0.85rem;
-    }
-    
-    .coaching-section {
-        padding: 12px;
-        border-bottom: 1px solid var(--gray-100);
-    }
-    
-    .coaching-label {
-        font-size: 0.65rem;
-        font-weight: 600;
-        color: var(--gray-500);
-        text-transform: uppercase;
-        margin-bottom: 6px;
-    }
-    
-    .coaching-content {
-        font-size: 0.8rem;
-        color: var(--gray-700);
-        line-height: 1.5;
-    }
-    
-    .coaching-question {
-        padding: 6px 0 6px 10px;
-        border-left: 2px solid var(--primary);
-        margin: 6px 0;
-        font-size: 0.8rem;
-    }
-    
-    .coaching-commit {
-        background: #f0fdf4;
-        border: 1px solid #bbf7d0;
-        border-radius: 6px;
-        padding: 10px;
-        color: #166534;
-        font-size: 0.8rem;
-    }
-    
-    /* Make streamlit elements compact */
+    /* Tabs - Google Style */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 0;
+        gap: 24px;
+        border-bottom: 1px solid var(--gray-200);
+        padding-bottom: 0;
     }
     
     .stTabs [data-baseweb="tab"] {
-        padding: 8px 16px;
-        font-size: 0.8rem;
+        height: 48px;
+        padding: 0 4px;
+        background: transparent;
+        border: none;
+        color: var(--gray-700);
+        font-weight: 500;
+        font-size: 0.875rem;
     }
     
-    .stSelectbox > div {
-        font-size: 0.85rem;
+    .stTabs [aria-selected="true"] {
+        color: var(--google-blue) !important;
+        border-bottom: 2px solid var(--google-blue) !important;
     }
     
-    .stMetric {
-        background: white;
-        padding: 10px;
-        border-radius: 8px;
-        border: 1px solid var(--gray-200);
+    /* Typography */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Google Sans', 'Roboto', sans-serif;
+        font-weight: 400;
+        color: var(--gray-900);
     }
     
-    .stMetric label {
-        font-size: 0.65rem !important;
-    }
+    h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    h2 { font-size: 1.25rem; margin-bottom: 1rem; color: var(--gray-900); }
+    h3 { font-size: 1rem; font-weight: 500; margin-bottom: 0.5rem; color: var(--gray-900); }
     
-    .stMetric [data-testid="stMetricValue"] {
-        font-size: 1.1rem !important;
-    }
-    
-    /* Expander compact */
-    .streamlit-expanderHeader {
-        font-size: 0.8rem !important;
-        padding: 8px !important;
-    }
-    
-    /* DataFrames scrollable */
-    [data-testid="stDataFrame"] {
+    .meta-text {
         font-size: 0.75rem;
+        color: var(--gray-700);
     }
     
-    /* Button styles */
+    /* Global Header */
+    .global-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 24px;
+        margin-bottom: 0;
+    }
+    
+    .header-logo {
+        font-size: 1.25rem;
+        font-weight: 500;
+        color: var(--gray-700);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .header-stats {
+        font-size: 0.875rem;
+        color: var(--gray-700);
+        background: var(--gray-100);
+        padding: 6px 12px;
+        border-radius: 16px;
+    }
+    
+    /* Cards - Flat & Functional */
+    .g-card {
+        border-bottom: 1px solid var(--gray-200);
+        padding: 16px 0;
+        margin-bottom: 8px;
+    }
+    
+    .g-card:last-child { border-bottom: none; }
+    
+    .g-card-title {
+        font-size: 1rem;
+        font-weight: 500;
+        margin-bottom: 4px;
+        color: var(--google-blue);
+    }
+    
+    .g-card-stat {
+        font-size: 0.875rem;
+        color: var(--gray-700);
+        margin-bottom: 8px;
+    }
+    
+    /* Driver List Item */
+    .driver-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--gray-200);
+        cursor: pointer;
+        transition: background 0.1s;
+    }
+    
+    .driver-item:hover {
+        background: var(--gray-50);
+    }
+    
+    .driver-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--google-blue);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-right: 12px;
+    }
+    
+    /* Risk Tags */
+    .risk-tag {
+        font-size: 0.75rem;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+    
+    .risk-critical { background: #fce8e6; color: #c5221f; }
+    .risk-warning { background: #ffeec2; color: #b06000; }
+    .risk-ok { background: #e6f4ea; color: #137333; }
+    
+    /* Coaching UI */
+    .coaching-step {
+        margin-bottom: 24px;
+    }
+    
+    .step-label {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--gray-700);
+        text-transform: uppercase;
+        margin-bottom: 4px;
+        letter-spacing: 0.5px;
+    }
+    
+    .step-content {
+        font-size: 1rem;
+        color: var(--gray-900);
+        line-height: 1.5;
+    }
+    
+    /* Primary Action Button */
     .stButton button {
-        font-size: 0.8rem !important;
-        padding: 6px 12px !important;
+        background-color: var(--google-blue) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 4px !important;
+        font-weight: 500 !important;
+        padding: 8px 24px !important;
+        box-shadow: 0 1px 2px rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15) !important;
+        transition: background .2s, box-shadow .2s;
     }
     
-    .stDownloadButton button {
-        width: 100%;
-        font-size: 0.8rem !important;
+    .stButton button:hover {
+        background-color: var(--google-blue-hover) !important;
+        box-shadow: 0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15) !important;
+    }
+    
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 48px 0;
+        color: var(--gray-700);
+    }
+    
+    .empty-icon {
+        font-size: 24px;
+        margin-bottom: 12px;
+        opacity: 0.5;
+    }
+    
+    /* Mobile Responsive */
+    @media (max-width: 600px) {
+        .main .block-container {
+            padding: 1rem;
+        }
+        .global-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
 # ============================================================================
-# DATA FUNCTIONS
+# UTILS & DATA
 # ============================================================================
-def clean_column_names(df):
-    df.columns = df.columns.str.strip().str.replace('\n', ' ').str.replace('\r', '')
-    return df
-def convert_yn_to_numeric(df, columns):
-    for col in columns:
-        if col in df.columns:
-            df[col] = df[col].apply(lambda x: 1 if str(x).upper().strip() in ['Y', 'YES', '1', 'TRUE'] else 0)
-    return df
-def fill_missing_columns(df):
-    defaults = {
-        'Delivered to Safe Location': 0, 'Geo Distance > 25m': 0,
-        'Delivered to Household Member / Customer': 0, 'Delivery preferences not followed': 0,
-        'Unattended Delivery & No Photo on Delivery': 0, 'Attended DNR Deliveries': 0,
-        'Feedback False Scan Indicator': 0, 'High Value Item (Y/N)': 0, 'Concession Cost': 0.0
-    }
-    for col, val in defaults.items():
-        if col not in df.columns:
-            df[col] = val
-    return df
 def load_file_data(uploaded_file):
-    filename = uploaded_file.name.lower()
-    if filename.endswith(('.xlsx', '.xls')):
-        try:
+    try:
+        if uploaded_file.name.endswith(('.xlsx', '.xls')):
             df = pd.read_excel(uploaded_file)
-        except Exception as e:
-            st.error(f"Excel-Fehler: {e}")
-            return None
-    else:
-        for enc in ['utf-8', 'latin1', 'ISO-8859-1', 'cp1252']:
-            try:
-                uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file, sep=None, engine='python', encoding=enc)
-                break
-            except:
-                continue
         else:
-            st.error("Datei konnte nicht geladen werden.")
-            return None
-    
-    df = clean_column_names(df)
-    df = convert_yn_to_numeric(df, ['High Value Item (Y/N)', 'Feedback False Scan Indicator', 'Attended DNR Deliveries'])
-    df = fill_missing_columns(df)
-    
-    for col in ['Concession Cost', 'Geo Distance > 25m', 'Delivered to Household Member / Customer',
-                'Delivery preferences not followed', 'Unattended Delivery & No Photo on Delivery']:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-    
-    return df
-def load_sample_data():
-    import random
-    random.seed(42)
-    drivers = ['A1B23M63H4GRJ1', 'A1CE94XEF8Q4IW', 'A1A5TD0FB57T8D', 'A1HA4BWI34PE6T', 
-               'A12VULCF9QV1FE', 'A1IQSLQOLKOZ0A', 'A12MTTC6P68FMV', 'A1XYZ123ABC']
-    zips = ['5020', '5400', '5021', '5082', '5071']
-    weeks = ['2025-44', '2025-45', '2025-46', '2025-47', '2025-48', '2025-49']
-    
-    data = []
-    for _ in range(218):
-        driver = random.choice(drivers)
-        data.append({
-            'year_week': random.choice(weeks),
-            'transporter_id': driver,
-            'zip_code': random.choice(zips),
-            'tracking_id': f'TRK{random.randint(100000, 999999)}',
-            'Concession Cost': round(random.uniform(5, 80), 2),
-            'High Value Item (Y/N)': random.choice([0]*4 + [1]),
-            'Geo Distance > 25m': random.choice([0]*3 + [1]) if driver in ['A1B23M63H4GRJ1', 'A12MTTC6P68FMV'] else 0,
-            'Delivered to Household Member / Customer': random.choice([0, 0, 1]) if driver in ['A1A5TD0FB57T8D', 'A12VULCF9QV1FE'] else 0,
-            'Delivery preferences not followed': random.choice([0]*3 + [1]) if driver == 'A1CE94XEF8Q4IW' else 0,
-            'Feedback False Scan Indicator': 1 if driver == 'A1A5TD0FB57T8D' and random.random() > 0.85 else 0,
-            'Unattended Delivery & No Photo on Delivery': random.choice([0, 0, 1]),
-            'Attended DNR Deliveries': random.choice([0, 1]),
-            'Delivered to Safe Location': 0
-        })
-    return pd.DataFrame(data)
-# ============================================================================
-# ANALYSIS FUNCTIONS
-# ============================================================================
-def get_driver_main_problem(driver_data):
+            df = pd.read_csv(uploaded_file, sep=None, engine='python')
+        
+        # Clean Columns
+        df.columns = df.columns.str.strip().str.replace('\n', ' ').str.replace('\r', '')
+        
+        # Y/N to Numeric
+        yn_cols = ['High Value Item (Y/N)', 'Feedback False Scan Indicator', 'Attended DNR Deliveries']
+        for col in yn_cols:
+            if col in df.columns:
+                df[col] = df[col].apply(lambda x: 1 if str(x).upper().strip() in ['Y', 'YES', '1', 'TRUE'] else 0)
+        
+        # Numeric Conversion
+        num_cols = ['Concession Cost', 'Geo Distance > 25m', 'Delivered to Household Member / Customer',
+                    'Delivery preferences not followed', 'Unattended Delivery & No Photo on Delivery']
+        for col in num_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                
+        # Fill missing critical columns
+        if 'zip_code' not in df.columns: df['zip_code'] = 'Unknown'
+        if 'year_week' not in df.columns: df['year_week'] = 'Unknown'
+        
+        return df
+    except Exception as e:
+        st.error(f"Error loading file: {e}")
+        return None
+def get_driver_problem(df):
     problems = {
-        'Geo Distance': driver_data.get('Geo Distance > 25m', pd.Series([0])).sum(),
-        'Household Member': driver_data.get('Delivered to Household Member / Customer', pd.Series([0])).sum(),
-        'Delivery Prefs': driver_data.get('Delivery preferences not followed', pd.Series([0])).sum(),
-        'No Photo': driver_data.get('Unattended Delivery & No Photo on Delivery', pd.Series([0])).sum(),
-        'False Scan': driver_data.get('Feedback False Scan Indicator', pd.Series([0])).sum(),
+        'Geo >25m': df.get('Geo Distance > 25m', 0).sum(),
+        'Household': df.get('Delivered to Household Member / Customer', 0).sum(),
+        'Prefs': df.get('Delivery preferences not followed', 0).sum(),
+        'No Photo': df.get('Unattended Delivery & No Photo on Delivery', 0).sum(),
+        'False Scan': df.get('Feedback False Scan Indicator', 0).sum(),
     }
-    active = {k: v for k, v in problems.items() if v > 0}
-    if len(active) > 1:
-        max_prob = max(active, key=active.get)
-        if active[max_prob] < sum(active.values()) * 0.5:
-            return 'Multiple', problems
-    return (max(problems, key=problems.get), problems) if sum(problems.values()) > 0 else ('Sonstige', problems)
-def get_loss_buckets(df):
-    return {
-        'Household': int(df.get('Delivered to Household Member / Customer', pd.Series([0])).sum()),
-        'Prefs': int(df.get('Delivery preferences not followed', pd.Series([0])).sum()),
-        'Geo': int(df.get('Geo Distance > 25m', pd.Series([0])).sum()),
-        'No Photo': int(df.get('Unattended Delivery & No Photo on Delivery', pd.Series([0])).sum()),
-        'False Scan': int(df.get('Feedback False Scan Indicator', pd.Series([0])).sum()),
-    }
-def get_weekly_trend(df, driver_id):
-    if 'year_week' not in df.columns:
-        return []
-    weekly = df[df['transporter_id'] == driver_id].groupby('year_week').size().sort_index()
-    return weekly.tolist()[-6:]
+    if sum(problems.values()) == 0: return "None", problems
+    return max(problems, key=problems.get), problems
+def get_trend(df, driver_id):
+    if 'year_week' not in df.columns: return []
+    return df[df['transporter_id'] == driver_id].groupby('year_week').size().sort_index().tolist()[-4:]
 # ============================================================================
-# MAIN APP
+# MAIN
 # ============================================================================
 def main():
-    # Data loading via expander
-    with st.expander("📁 Daten laden", expanded=True):
-        uploaded_file = st.file_uploader("CSV/Excel hochladen", type=['csv', 'xlsx', 'xls'], label_visibility="collapsed")
-        if uploaded_file:
-            df = load_file_data(uploaded_file)
-            if df is not None:
-                st.success(f"✓ {len(df)} Zeilen geladen")
-        else:
-            df = None
+    # --- Header ---
+    if 'data' not in st.session_state:
+        st.session_state.data = None
+    with st.container():
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            st.markdown('<div class="header-logo">📊 LTS Quality</div>', unsafe_allow_html=True)
     
-    # Empty state - no demo data
-    if df is None:
+    # --- Data Loading (Hidden in Drawer usually, but Expander here) ---
+    if st.session_state.data is None:
+        with st.expander("Importer", expanded=True):
+            uploaded = st.file_uploader("Upload Concession Data (CSV/Excel)", label_visibility="collapsed")
+            if uploaded:
+                st.session_state.data = load_file_data(uploaded)
+                st.rerun()
+        
+        # Empty State
         st.markdown("""
-        <div style="text-align: center; padding: 60px 20px; background: white; border-radius: 12px; border: 2px dashed #e5e7eb; margin-top: 20px;">
-            <div style="font-size: 3rem; margin-bottom: 16px;">📊</div>
-            <h2 style="color: #374151; margin-bottom: 8px;">Willkommen bei LTS Quality Management</h2>
-            <p style="color: #6b7280; margin-bottom: 24px;">Lade deine Concession-Daten hoch, um zu starten.</p>
-            <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; display: inline-block; text-align: left;">
-                <p style="font-size: 0.85rem; color: #374151; margin: 0 0 8px 0;"><strong>Benötigte Spalten:</strong></p>
-                <code style="font-size: 0.75rem; color: #6b7280;">transporter_id, year_week, zip_code, Geo Distance > 25m, ...</code>
-            </div>
+        <div class="empty-state">
+            <div class="empty-icon">📂</div>
+            <div>No data loaded yet.</div>
+            <div style="font-size:0.75rem; margin-top:8px;">Please upload your Concession Report to start.</div>
         </div>
         """, unsafe_allow_html=True)
         return
+    df = st.session_state.data
     
-    # Compact header
-    weeks = sorted([str(w) for w in df['year_week'].unique()]) if 'year_week' in df.columns else []
-    try:
-        week_range = f"KW{str(weeks[0]).split('-')[1]}-{str(weeks[-1]).split('-')[1]}" if weeks and '-' in str(weeks[0]) else ""
-    except:
-        week_range = ""
+    # --- Global Stats (Neutral) ---
+    weeks = sorted([str(w) for w in df['year_week'].unique()])
+    week_range = f"{weeks[0]} - {weeks[-1]}" if weeks else "All time"
+    total_dnr = len(df)
     
-    st.markdown(f"""
-    <div class="app-header">
-        <span class="app-title">📊 LTS Quality</span>
-        <span class="app-stat">DNR: {len(df)} ({week_range})</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Navigation via TABS (mobile friendly)
-    tab1, tab2, tab3, tab4 = st.tabs(["🗺️ Roadmap", "👥 Fahrer", "📈 Trends", "🎓 Coaching"])
-    
-    # ========================================================================
-    # TAB 1: ROADMAP
-    # ========================================================================
-    with tab1:
-        buckets = get_loss_buckets(df)
-        sorted_b = sorted(buckets.items(), key=lambda x: x[1], reverse=True)[:3]
+    st.markdown(f'<div class="header-stats" style="margin-bottom: 24px;">{week_range} &nbsp; • &nbsp; {total_dnr} Concessions</div>', unsafe_allow_html=True)
+    # --- Navigation ---
+    tab_overview, tab_drivers, tab_insights, tab_actions = st.tabs(["Overview", "Drivers", "Insights", "Actions"])
+    # 1. OVERVIEW (Roadmap transformed)
+    with tab_overview:
+        st.markdown("### Focus Areas")
         
-        actions = [
-            {"tag": "SOFORT", "tag_class": "tag-critical", 
-             "content": ["Standup-Briefing", "'Household' nur bei Übergabe", "POD Umgehung = Warnung"]},
-            {"tag": "TRAINING", "tag_class": "tag-info",
-             "content": ["1:1 mit Top Geo-Fahrern", "Scan an Haustür", "Ride-along"]},
-            {"tag": "ANALYSE", "tag_class": "tag-low",
-             "content": ["Apartmentkomplexe prüfen", "Access Codes", "Safe Locations"]}
-        ]
+        buckets = {
+            'Household without Handover': df.get('Delivered to Household Member / Customer', pd.Series([0])).sum(),
+            'Delivery Preferences Ignored': df.get('Delivery preferences not followed', pd.Series([0])).sum(),
+            'Geo Violation (>25m)': df.get('Geo Distance > 25m', pd.Series([0])).sum(),
+            'No Photo on Delivery': df.get('Unattended Delivery & No Photo on Delivery', pd.Series([0])).sum(),
+            'False Scans': df.get('Feedback False Scan Indicator', pd.Series([0])).sum(),
+        }
         
-        for i, (bucket_name, count) in enumerate(sorted_b):
-            a = actions[i] if i < len(actions) else actions[-1]
-            pct = count / sum(buckets.values()) * 100 if sum(buckets.values()) > 0 else 0
-            
-            st.markdown(f"""
-            <div class="compact-card">
-                <div class="compact-card-header">
-                    <span class="compact-card-title">{i+1}. {bucket_name}</span>
-                    <span class="tag-sm {a['tag_class']}">{a['tag']}</span>
+        sorted_buckets = sorted(buckets.items(), key=lambda x: x[1], reverse=True)
+        total_issues = sum(buckets.values())
+        
+        if total_issues == 0:
+            st.info("No issues detected in the uploaded data.")
+        else:
+            for reason, count in sorted_buckets:
+                if count == 0: continue
+                pct = (count / total_issues) * 100
+                st.markdown(f"""
+                <div class="g-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div class="g-card-title" style="color: var(--gray-900); font-weight: 500;">{reason}</div>
+                        <div style="color: var(--gray-500); font-size: 0.875rem;">{pct:.0f}%</div>
+                    </div>
+                    <div class="g-card-stat">{int(count)} cases &nbsp;·&nbsp; Impact: High</div>
+                    <div style="height: 4px; background: var(--gray-100); border-radius: 2px; width: 100%; margin-top: 4px;">
+                        <div style="height: 4px; background: var(--google-blue); border-radius: 2px; width: {pct}%;"></div>
+                    </div>
                 </div>
-                <div class="compact-card-stat">{pct:.0f}% • {count} Fälle</div>
-                <ul class="compact-card-list">
-                    {''.join(f'<li>{c}</li>' for c in a['content'])}
-                </ul>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+    # 2. DRIVERS (People-first)
+    with tab_drivers:
+        searched = st.text_input("Find driver", placeholder="Search ID...", label_visibility="collapsed")
         
-        with st.expander("📋 Maßnahmenplan"):
-            plan = pd.DataFrame([
-                {"Prio": "🔴", "Maßnahme": "POD Check", "Ziel": "Top 3 Fahrer"},
-                {"Prio": "🟠", "Maßnahme": "Geo Training", "Ziel": "Top 5 Fahrer"},
-                {"Prio": "🟡", "Maßnahme": "Ablageort", "Ziel": "Alle"},
-            ])
-            st.dataframe(plan, use_container_width=True, hide_index=True)
-    
-    # ========================================================================
-    # TAB 2: FAHRER
-    # ========================================================================
-    with tab2:
-        search = st.text_input("🔍", placeholder="Suche ID...", label_visibility="collapsed")
-        
-        watchlist = []
+        drivers = []
         for did in df['transporter_id'].unique():
             dd = df[df['transporter_id'] == did]
-            mp, _ = get_driver_main_problem(dd)
-            watchlist.append({'id': did, 'count': len(dd), 'problem': mp})
+            mp, _ = get_driver_problem(dd)
+            drivers.append({'id': did, 'count': len(dd), 'problem': mp})
         
-        wdf = sorted(watchlist, key=lambda x: x['count'], reverse=True)
-        if search:
-            wdf = [w for w in wdf if search.lower() in w['id'].lower()]
-        
-        for w in wdf[:8]:
-            badge_class = 'badge-geo' if 'Geo' in w['problem'] else 'badge-household' if 'Household' in w['problem'] else 'badge-prefs' if 'Pref' in w['problem'] else 'badge-multiple'
+        drivers = sorted(drivers, key=lambda x: x['count'], reverse=True)
+        if searched:
+            drivers = [d for d in drivers if searched.lower() in d['id'].lower()]
             
-            st.markdown(f"""
-            <div class="driver-row">
-                <div class="driver-row-top">
-                    <span class="driver-id">{w['id'][:12]}...</span>
-                    <span class="driver-count">{w['count']} DSC</span>
-                </div>
-                <span class="driver-badge {badge_class}">{w['problem']}</span>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    # ========================================================================
-    # TAB 3: TRENDS
-    # ========================================================================
-    with tab3:
-        # Loss buckets chart
-        buckets = get_loss_buckets(df)
-        bdf = pd.DataFrame(list(buckets.items()), columns=['Grund', 'Anzahl']).sort_values('Anzahl', ascending=True)
-        
-        fig = px.bar(bdf, x='Anzahl', y='Grund', orientation='h',
-                    color_discrete_sequence=['#ef4444'])
-        fig.update_layout(
-            height=200, 
-            margin=dict(l=0, r=0, t=10, b=10),
-            showlegend=False,
-            xaxis_title="", yaxis_title="",
-            plot_bgcolor='white',
-            font=dict(size=11)
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Weekly trend
+        st.markdown(f"<div class='meta-text' style='margin-bottom:16px'>{len(drivers)} drivers found</div>", unsafe_allow_html=True)
+        for d in drivers[:20]: # Limit list for performance
+            risk_class = "risk-critical" if d['count'] > 10 else "risk-warning" if d['count'] > 5 else "risk-ok"
+            risk_label = "Critical" if d['count'] > 10 else "At Risk" if d['count'] > 5 else "Monitor"
+            
+            # Simple clickable mechanic using columns/buttons
+            with st.container():
+                c1, c2, c3 = st.columns([4, 2, 1])
+                with c1:
+                    st.markdown(f"**{d['id']}**<br><span style='font-size:0.8rem; color:#5f6368'>{d['problem']}</span>", unsafe_allow_html=True)
+                with c2:
+                    st.markdown(f"<span class='risk-tag {risk_class}'>{risk_label}</span>", unsafe_allow_html=True)
+                with c3:
+                    st.markdown(f"**{d['count']}**", unsafe_allow_html=True)
+                st.markdown("<hr style='margin: 8px 0; border:none; border-bottom:1px solid #f1f3f4;'>", unsafe_allow_html=True)
+    # 3. INSIGHTS (Trends)
+    with tab_insights:
+        st.markdown("### Weekly Trend")
         if 'year_week' in df.columns:
             weekly = df.groupby('year_week').size().reset_index(name='count')
-            fig2 = px.line(weekly, x='year_week', y='count', markers=True)
-            fig2.update_traces(line_color='#3b82f6', line_width=2, marker_size=6)
-            fig2.update_layout(
-                height=180, 
-                margin=dict(l=0, r=0, t=10, b=10),
-                xaxis_title="", yaxis_title="DNR",
+            fig = px.bar(weekly, x='year_week', y='count', text='count')
+            fig.update_traces(marker_color='#1a73e8', textposition='outside')
+            fig.update_layout(
                 plot_bgcolor='white',
-                font=dict(size=10)
+                margin=dict(t=20, l=0, r=0, b=0),
+                xaxis=dict(showgrid=False, title=None),
+                yaxis=dict(showgrid=True, gridcolor='#f1f3f4', title=None, showticklabels=False),
+                height=250
             )
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
         
-        # Top ZIPs
+        st.markdown("### Top Zip Codes")
         if 'zip_code' in df.columns:
-            st.markdown("**Top PLZ:**")
-            zc = df.groupby('zip_code').size().sort_values(ascending=False).head(3)
-            for z, c in zc.items():
-                pct = c / len(df) * 100
-                st.markdown(f"• **{z}**: {c} ({pct:.0f}%)")
-    
-    # ========================================================================
-    # TAB 4: COACHING - Enhanced Behavioral Psychology Version
-    # ========================================================================
-    with tab4:
-        # Build driver list with percentile ranking
-        driver_stats = []
-        for did in df['transporter_id'].unique():
-            dd = df[df['transporter_id'] == did]
-            mp, cnts = get_driver_main_problem(dd)
-            driver_stats.append({
-                'id': did, 
-                'count': len(dd), 
-                'problem': mp,
-                'counts': cnts
-            })
-        driver_stats = sorted(driver_stats, key=lambda x: x['count'], reverse=True)
+            top_zips = df['zip_code'].value_counts().head(5)
+            for z, c in top_zips.items():
+                st.markdown(f"""
+                <div style="display:flex; justify-content:space-between; padding: 8px 0; border-bottom:1px solid #f1f3f4;">
+                    <span>{z}</span>
+                    <span style="font-weight:500;">{c}</span>
+                </div>
+                """, unsafe_allow_html=True)
+    # 4. ACTIONS (Coaching)
+    with tab_actions:
+        # Driver Selection
+        opts = sorted(df['transporter_id'].unique().tolist())
+        sel_driver = st.selectbox("Select Driver", opts, label_visibility="collapsed")
         
-        # Calculate percentiles
-        total_drivers = len(driver_stats)
-        for i, d in enumerate(driver_stats):
-            d['rank'] = i + 1
-            d['percentile'] = ((i + 1) / total_drivers) * 100
-            # Traffic light based on rank
-            if d['percentile'] <= 10:
-                d['status'] = '🔴'
-                d['status_text'] = 'KRITISCH'
-                d['status_class'] = 'critical'
-            elif d['percentile'] <= 30:
-                d['status'] = '🟠'
-                d['status_text'] = 'RISIKO'
-                d['status_class'] = 'warning'
-            else:
-                d['status'] = '🟢'
-                d['status_text'] = 'OK'
-                d['status_class'] = 'ok'
-        
-        # Driver selection
-        sel = st.selectbox(
-            "Fahrer auswählen", 
-            options=[d['id'] for d in driver_stats],
-            format_func=lambda x: f"{next((d['status'] for d in driver_stats if d['id'] == x), '')} {x[:12]}... ({next((d['count'] for d in driver_stats if d['id'] == x), 0)} DSC)",
-            label_visibility="collapsed"
-        )
-        
-        if sel:
-            # Get driver data
-            driver_data = df[df['transporter_id'] == sel]
-            driver_info = next((d for d in driver_stats if d['id'] == sel), None)
+        if sel_driver:
+            dd = df[df['transporter_id'] == sel_driver]
+            mp, counts = get_driver_problem(dd)
+            total = len(dd)
             
-            if driver_info:
-                total = driver_info['count']
-                mp = driver_info['problem']
-                counts = driver_info['counts']
-                percentile = driver_info['percentile']
-                status = driver_info['status']
-                status_text = driver_info['status_text']
+            # -- Driver Header Card --
+            st.markdown(f"""
+            <div style="background:var(--gray-50); padding: 24px; border-radius: 8px; margin-bottom: 24px;">
+                <div style="font-size: 1.5rem; font-weight: 400; margin-bottom: 4px;">{sel_driver}</div>
+                <div style="color: var(--gray-700); margin-bottom: 16px;">
+                    {total} concessions in 4 weeks &nbsp;·&nbsp; Primary Issue: <strong>{mp}</strong>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # -- Internal Tabs --
+            subtab_coach, subtab_history = st.tabs(["Action Plan", "History"])
+            
+            with subtab_coach:
+                # 5-Step Logic (Simplified Google Style)
                 
-                weeks_active = driver_data['year_week'].nunique() if 'year_week' in driver_data.columns else 1
-                hv = int(driver_data.get('High Value Item (Y/N)', pd.Series([0])).sum())
+                # 1. Fact
+                st.markdown('<div class="coaching-step">', unsafe_allow_html=True)
+                st.markdown('<div class="step-label">1. Observation</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="step-content">Data shows {total} concessions. Major contributor is <strong>{mp}</strong> based on recent delivery attempts.</div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Get top ZIP
-                top_zip = ""
-                zip_pct = 0
-                if 'zip_code' in driver_data.columns:
-                    zc = driver_data['zip_code'].value_counts()
-                    if len(zc) > 0:
-                        top_zip = str(zc.index[0])
-                        zip_pct = (zc.iloc[0] / total) * 100
+                # 2. Risk
+                st.markdown('<div class="coaching-step">', unsafe_allow_html=True)
+                st.markdown('<div class="step-label">2. Impact</div>', unsafe_allow_html=True)
+                risk_msg = "High risk of DNR claims in this area." if mp == "Household" else "System flagged suspicious GPS behavior."
+                st.markdown(f'<div class="step-content" style="color:var(--google-red);">{risk_msg} Continued pattern triggers automated review.</div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
                 
-                # ================================================================
-                # NEXT ACTION BOX (Top Priority)
-                # ================================================================
-                if percentile <= 10:
-                    next_action = "🔴 Ride-Along erforderlich"
-                    action_bg = "#fef2f2"
-                    action_border = "#fecaca"
-                elif percentile <= 30:
-                    next_action = "🟠 1:1 Coaching Gespräch"
-                    action_bg = "#fff7ed"
-                    action_border = "#fed7aa"
+                # 3. Action
+                st.markdown('<div class="coaching-step">', unsafe_allow_html=True)
+                st.markdown('<div class="step-label">3. Required Action</div>', unsafe_allow_html=True)
+                if "Household" in mp:
+                    rules = "• Hand over to person only.<br>• If no answer, use safe place + photo."
+                elif "Geo" in mp:
+                    rules = "• Scan packages at the doorstep only.<br>• Do not scan inside vehicle."
                 else:
-                    next_action = "🟢 Beobachtung fortsetzen"
-                    action_bg = "#f0fdf4"
-                    action_border = "#bbf7d0"
+                    rules = "• Follow standard delivery validation procedure."
+                st.markdown(f'<div class="step-content">{rules}</div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
                 
-                st.markdown(f"""
-                <div style="background: {action_bg}; border: 2px solid {action_border}; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
-                    <div style="font-size: 0.7rem; color: #6b7280; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Nächster Schritt</div>
-                    <div style="font-size: 1.1rem; font-weight: 700;">{next_action}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                # 4. Commitment
+                st.markdown('<div class="step-label" style="margin-bottom:12px;">4. Driver Commitment</div>', unsafe_allow_html=True)
                 
-                # ================================================================
-                # RISK STATUS (Traffic Light + Percentile)
-                # ================================================================
-                st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: white; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <div style="font-size: 1.5rem; margin-bottom: 4px;">{status} {sel[:14]}...</div>
-                            <div style="font-size: 0.85rem; opacity: 0.8;">Du bist aktuell im <strong>obersten {100 - percentile:.0f}%</strong> Risikobereich.</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 2rem; font-weight: 700;">{total}</div>
-                            <div style="font-size: 0.7rem; opacity: 0.7;">Concessions</div>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # ================================================================
-                # #1 ROOT CAUSE (Highlighted)
-                # ================================================================
-                root_cause_name = mp
-                root_cause_count = max(counts.values()) if counts else 0
-                
-                st.markdown(f"""
-                <div style="background: white; border-left: 4px solid #ef4444; border-radius: 8px; padding: 14px; margin-bottom: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
-                    <div style="font-size: 0.65rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Dein #1 Problem</div>
-                    <div style="font-size: 1.1rem; font-weight: 700; color: #dc2626; margin-top: 4px;">{root_cause_name}</div>
-                    <div style="font-size: 0.8rem; color: #374151; margin-top: 4px;">{int(root_cause_count)}× in den letzten {weeks_active} Wochen</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # PLZ Risk Overlay
-                if top_zip and zip_pct > 30:
-                    st.markdown(f"""
-                    <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                        <span style="font-weight: 600;">📍 {zip_pct:.0f}% deiner DNRs stammen aus PLZ {top_zip}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                st.markdown("---")
-                
-                # ================================================================
-                # 5-STEP COACHING SCRIPT
-                # ================================================================
-                
-                weeks_str = f"KW{driver_data['year_week'].min().split('-')[1] if 'year_week' in driver_data.columns and '-' in str(driver_data['year_week'].iloc[0]) else '?'}-{driver_data['year_week'].max().split('-')[1] if 'year_week' in driver_data.columns and '-' in str(driver_data['year_week'].iloc[0]) else '?'}" if 'year_week' in driver_data.columns else ""
-                
-                # Build specific coaching based on root cause
-                if counts.get('False Scan', 0) > 0:
-                    fs_count = int(counts['False Scan'])
-                    fact = f"In {weeks_str} hattest du {total} Concessions. {fs_count} davon wegen False Scan."
-                    behavior = f"Die Daten zeigen, dass du {fs_count}× gescannt hast an Orten, an denen du laut GPS nicht warst."
-                    risk = "False Scans sind ein schwerer Verstoß und können zur sofortigen Kündigung führen. Das ist keine Verhandlungssache."
-                    rules = ["❌ Niemals im Fahrzeug scannen", "✅ Scan NUR direkt an der Haustür", "❌ Unsicher? → lieber No Access"]
-                    commitment = "Ich bestätige, dass ich ab sofort ausschließlich an der Haustür scanne."
-                    
-                elif counts.get('Household Member', 0) > 0:
-                    hm_count = int(counts['Household Member'])
-                    geo_count = int(counts.get('Geo Distance', 0))
-                    fact = f"In {weeks_str} hattest du {total} Concessions. {hm_count} davon wegen Household-Zustellung{f' und {geo_count} wegen Geo >25m' if geo_count > 0 else ''}."
-                    behavior = f"Die Daten zeigen, dass Pakete als 'Household Member' markiert wurden, ohne persönliche Übergabe{' – und teils mit großem Abstand zum Zielort' if geo_count > 0 else ''}."
-                    risk = f"Diese Art von Scans führt häufig zu DNRs{f' und betrifft besonders PLZ {top_zip}' if top_zip else ''}. Wiederholungen führen zu Route-Entzug oder Ride-Along."
-                    rules = ["✅ Household NUR bei persönlicher Übergabe", "✅ Bei Ablage → Safe Location + Foto", "❌ Unsicher? → lieber Reattempt"]
-                    commitment = "Ich bestätige, dass ich 'Household Member' nur bei persönlicher Übergabe auswähle."
-                    
-                elif counts.get('Geo Distance', 0) > 0:
-                    geo_count = int(counts['Geo Distance'])
-                    fact = f"In {weeks_str} hattest du {total} Concessions. {geo_count} davon wegen GPS-Abweichung >25m."
-                    behavior = f"In {geo_count} Fällen hast du >25m vom Zielort gescannt. Das passiert meist im Auto bei Group Stops."
-                    risk = "Scans im Fahrzeug werden vom System als verdächtig erkannt und führen automatisch zu Concession-Kosten."
-                    rules = ["✅ Scan IMMER an der Haustür", "✅ Group Stops: Jedes Paket einzeln vor Ort scannen", "❌ Niemals im Fahrzeug scannen"]
-                    commitment = "Ich bestätige, dass ich ab sofort erst an der Haustür scanne, nicht im Fahrzeug."
-                    
-                else:
-                    fact = f"In {weeks_str} hattest du {total} Concessions mit verschiedenen Ursachen."
-                    behavior = "Es gibt kein klares Muster – wir müssen gemeinsam die Einzelfälle durchgehen."
-                    risk = "Ohne klare Ursache können wir das Problem nicht gezielt lösen."
-                    rules = ["✅ Alle Richtlinien beachten", "✅ Bei Unsicherheit nachfragen"]
-                    commitment = "Ich nehme an einem detaillierten Coaching teil."
-                
-                # Display 5-Step Structure
-                st.markdown("### 📋 Coaching-Protokoll")
-                
-                # Step 1: Fact
-                st.markdown(f"""
-                <div style="background: white; border-radius: 8px; padding: 14px; margin-bottom: 10px; border: 1px solid #e5e7eb;">
-                    <div style="font-size: 0.65rem; color: #6b7280; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;">1. Klarer Fakt</div>
-                    <div style="font-size: 0.9rem; color: #111827; font-weight: 500;">{fact}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Step 2: Behavior
-                st.markdown(f"""
-                <div style="background: white; border-radius: 8px; padding: 14px; margin-bottom: 10px; border: 1px solid #e5e7eb;">
-                    <div style="font-size: 0.65rem; color: #6b7280; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;">2. Konkretes Verhalten</div>
-                    <div style="font-size: 0.9rem; color: #111827;">{behavior}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Step 3: Risk
-                st.markdown(f"""
-                <div style="background: #fef2f2; border-radius: 8px; padding: 14px; margin-bottom: 10px; border: 1px solid #fecaca;">
-                    <div style="font-size: 0.65rem; color: #991b1b; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;">3. Risiko</div>
-                    <div style="font-size: 0.9rem; color: #7f1d1d;">{risk}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Step 4: Rules
-                st.markdown(f"""
-                <div style="background: white; border-radius: 8px; padding: 14px; margin-bottom: 10px; border: 1px solid #e5e7eb;">
-                    <div style="font-size: 0.65rem; color: #6b7280; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;">4. Klare Regeln</div>
-                    <div style="font-size: 0.9rem; color: #111827;">{'<br>'.join(rules)}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Step 5: Commitment
-                st.markdown(f"""
-                <div style="background: #f0fdf4; border-radius: 8px; padding: 14px; margin-bottom: 16px; border: 2px solid #86efac;">
-                    <div style="font-size: 0.65rem; color: #166534; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;">5. Commitment</div>
-                    <div style="font-size: 0.9rem; color: #166534; font-weight: 600;">"{commitment}"</div>
-                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #86efac; font-size: 0.8rem; color: #166534;">
-                        ☐ Unterschrift Fahrer: _______________ Datum: ___________
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # ================================================================
-                # DETAILS EXPANDER
-                # ================================================================
-                with st.expander("📊 Detailanalyse"):
-                    # Problem breakdown
-                    breakdown = []
-                    for col, label in [
-                        ('Geo Distance > 25m', 'Geo >25m'),
-                        ('Delivered to Household Member / Customer', 'Household'),
-                        ('Delivery preferences not followed', 'Prefs ignoriert'),
-                        ('Unattended Delivery & No Photo on Delivery', 'Kein Foto'),
-                        ('Feedback False Scan Indicator', '🚨 False Scan')
-                    ]:
-                        if col in driver_data.columns:
-                            cnt = int(driver_data[col].sum())
-                            if cnt > 0:
-                                breakdown.append({'Problem': label, 'Anzahl': cnt, 'Anteil': f"{(cnt/total)*100:.0f}%"})
-                    
-                    if breakdown:
-                        st.dataframe(pd.DataFrame(breakdown), use_container_width=True, hide_index=True)
-                    
-                    # ZIP breakdown
-                    if 'zip_code' in driver_data.columns:
-                        st.markdown("**PLZ-Verteilung:**")
-                        zc = driver_data['zip_code'].value_counts().head(3)
-                        for z, c in zc.items():
-                            pct = (c / total) * 100
-                            st.markdown(f"• PLZ {z}: {c}× ({pct:.0f}%)")
-                    
-                    # Weekly pattern
-                    if 'year_week' in driver_data.columns:
-                        st.markdown("**Wöchentlicher Verlauf:**")
-                        weekly = driver_data.groupby('year_week').size()
-                        for w, c in weekly.items():
-                            st.markdown(f"• {w}: {c} Concessions")
-                
-                # ================================================================
-                # DOWNLOAD PROTOCOL
-                # ================================================================
-                protocol = f"""═══════════════════════════════════════════════
-COACHING-PROTOKOLL
-═══════════════════════════════════════════════
-Datum: {datetime.now().strftime('%d.%m.%Y %H:%M')}
-Fahrer-ID: {sel}
-Status: {status} {status_text} (Top {100-percentile:.0f}%)
-Concessions: {total} in {weeks_active} Wochen
-═══════════════════════════════════════════════
-NÄCHSTER SCHRITT: {next_action}
-═══════════════════════════════════════════════
-#1 HAUPTPROBLEM: {root_cause_name} ({int(root_cause_count)}×)
-───────────────────────────────────────────────
-1. KLARER FAKT
-{fact}
-2. KONKRETES VERHALTEN
-{behavior}
-3. RISIKO
-{risk}
-4. KLARE REGELN
-{chr(10).join(rules)}
-5. COMMITMENT
-"{commitment}"
-───────────────────────────────────────────────
-☐ Unterschrift Fahrer: ___________________________
-☐ Unterschrift Manager: __________________________
-Datum: ___________
-═══════════════════════════════════════════════
-"""
-                
-                st.download_button(
-                    "📥 Coaching-Protokoll herunterladen",
-                    protocol,
-                    file_name=f"coaching_{sel[:10]}_{datetime.now().strftime('%Y%m%d')}.txt",
-                    use_container_width=True
-                )
+                col_c1, col_c2 = st.columns([3, 1])
+                with col_c1:
+                   st.markdown(f"I confirm I will follow the procedure for **{mp}** moving forward.")
+                with col_c2:
+                    if st.button("Confirm"):
+                        st.success("Confirmed")
+            
+            with subtab_history:
+                st.dataframe(dd[['year_week', 'tracking_id', 'zip_code', 'Concession Cost']], use_container_width=True, hide_index=True)
 if __name__ == "__main__":
     main()
