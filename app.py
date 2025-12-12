@@ -399,9 +399,9 @@ def get_time_analysis(df, driver_id=None):
         'daily_dist': {}
     }
     
-    # Find timestamp column
-    time_cols = ['shipment_delivered_date', 'shipment_created_timestamp', 'delivered_date', 
-                 'delivery_timestamp', 'created_at', 'timestamp']
+    # Find timestamp column - prioritize delivery_date_time and dnr_date
+    time_cols = ['delivery_date_time', 'dnr_date', 'shipment_delivered_date', 'shipment_created_timestamp', 
+                 'delivered_date', 'delivery_timestamp', 'created_at', 'timestamp']
     time_col = None
     for col in time_cols:
         if col in df.columns:
@@ -2032,6 +2032,52 @@ def main():
                 </div>
                 """, unsafe_allow_html=True)
             
+            # --- ENHANCED ANALYTICS INSIGHTS FOR COACHING ---
+            # Get extended analytics for this driver
+            driver_stats = get_driver_enhanced_stats(df, sel_driver)
+            driver_time = get_time_analysis(df, sel_driver)
+            
+            # Analytics insights panel
+            insights_items = []
+            
+            # Time pattern insight
+            if driver_time['peak_hour']:
+                insights_items.append(f"⏰ Peak-Zeit: <strong>{driver_time['peak_hour']}</strong> ({driver_time['peak_hour_pct']:.0f}%)")
+            if driver_time['peak_day']:
+                insights_items.append(f"📅 Risiko-Tag: <strong>{driver_time['peak_day']}</strong> ({driver_time['peak_day_pct']:.0f}%)")
+            
+            # Contact rate insight
+            if driver_stats['contact_attempts'] > 0 or driver_stats['contact_success_rate'] > 0:
+                rate_color = "#137333" if driver_stats['contact_success_rate'] > 50 else "#c5221f"
+                insights_items.append(f"📞 Kontakt-Rate: <strong style='color:{rate_color}'>{driver_stats['contact_success_rate']:.0f}%</strong>")
+            
+            # Dimension misbookings
+            if driver_stats['dimension_misbookings'] > 0:
+                insights_items.append(f"📦 Briefkasten-Misbookings: <strong style='color:#c5221f'>{int(driver_stats['dimension_misbookings'])}</strong>")
+            
+            # Cost insight
+            if driver_stats['total_cost'] > 0:
+                insights_items.append(f"💰 Kosten: <strong>€{driver_stats['total_cost']:,.0f}</strong> (Ø €{driver_stats['avg_cost']:.0f}/Concession)")
+            
+            # Trend insight
+            if driver_stats['trend_direction'] != '→':
+                trend_color = "#c5221f" if driver_stats['trend_direction'] == '↑' else "#137333"
+                insights_items.append(f"📈 Trend: <strong style='color:{trend_color}'>{driver_stats['trend_direction']} {driver_stats['trend_change']:+d}</strong> vs. Vorwoche")
+            
+            # Repeat offender
+            if driver_stats['is_repeat_offender']:
+                insights_items.append(f"🔁 <strong style='color:#b06000'>Wiederholungstäter</strong> ({driver_stats['consecutive_weeks']} Wochen in Folge)")
+            
+            if insights_items:
+                st.markdown(f"""
+                <div style="background: #e8f0fe; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="font-size: 0.75rem; color: #1967d2; font-weight: 500; margin-bottom: 8px;">🔍 ANALYTICS INSIGHTS</div>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.9rem; color: #202124;">
+                        {''.join([f"<div>{item}</div>" for item in insights_items])}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
             # -- Internal Tabs --
             subtab_coach, subtab_details, subtab_history = st.tabs(["Maßnahmenplan", "Analyse", "Verlauf"])
             
@@ -2050,14 +2096,30 @@ def main():
                 
                 st.markdown("### Coaching-Skript")
                 
-                # 1. Observation (Fact)
+                # Build time pattern string for coaching
+                time_insight = ""
+                if driver_time['peak_hour']:
+                    time_insight = f" Auffällig: {driver_time['peak_hour_pct']:.0f}% deiner Probleme passieren zwischen {driver_time['peak_hour']}."
+                if driver_time['peak_day'] and driver_time['peak_day_pct'] > 25:
+                    time_insight += f" {driver_time['peak_day']} ist dein kritischster Tag ({driver_time['peak_day_pct']:.0f}%)."
+                
+                contact_insight = ""
+                if driver_stats['contact_success_rate'] < 30 and driver_stats['contact_attempts'] > 0:
+                    contact_insight = " Deine Kontakt-Erfolgsrate ist niedrig - Kunden erreichen ist wichtig für erfolgreiche Zustellung."
+                
+                misbooking_insight = ""
+                if driver_stats['dimension_misbookings'] > 2:
+                    misbooking_insight = f" {int(driver_stats['dimension_misbookings'])} Pakete wurden falsch als Briefkasten/Household gebucht."
+                
+                # 1. Observation (Fact) - ENHANCED
                 st.markdown(f"""
                 <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
                     <div style="font-size: 0.7rem; color: #5f6368; text-transform: uppercase; font-weight: 500; margin-bottom: 8px;">1. FESTSTELLUNG</div>
                     <div style="font-size: 1rem; color: #202124; line-height: 1.6;">
-                        Im Zeitraum <strong>{week_str}</strong> hattest du <strong>{total} Concessions</strong>.
+                        Im Zeitraum <strong>{week_str}</strong> hattest du <strong>{total} Concessions</strong> (€{driver_stats['total_cost']:,.0f} Kosten).
                         Dein Hauptproblem ist <strong>{mp}</strong> ({int(max(counts.values()) if counts else 0)} Fälle).
                         {f'Zusätzlich: {zip_pct:.0f}% der Fälle in PLZ {top_zip}.' if top_zip and zip_pct > 30 else ''}
+                        {time_insight}{contact_insight}{misbooking_insight}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
