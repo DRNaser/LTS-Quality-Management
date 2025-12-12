@@ -286,11 +286,11 @@ def get_driver_problem(df):
     problems = {
         'Geo >25m': df.get('Geo Distance > 25m', 0).sum(),
         'Household': df.get('Delivered to Household Member / Customer', 0).sum(),
-        'Prefs': df.get('Delivery preferences not followed', 0).sum(),
-        'No Photo': df.get('Unattended Delivery & No Photo on Delivery', 0).sum(),
+        'Lieferpräferenz': df.get('Delivery preferences not followed', 0).sum(),
+        'Kein Foto': df.get('Unattended Delivery & No Photo on Delivery', 0).sum(),
         'False Scan': df.get('Feedback False Scan Indicator', 0).sum(),
     }
-    if sum(problems.values()) == 0: return "None", problems
+    if sum(problems.values()) == 0: return "Keine", problems
     return max(problems, key=problems.get), problems
 def get_trend(df, driver_id):
     if 'year_week' not in df.columns: return []
@@ -339,10 +339,10 @@ def main():
         st.markdown("### Focus Areas")
         
         buckets = {
-            'Household without Handover': df.get('Delivered to Household Member / Customer', pd.Series([0])).sum(),
-            'Delivery Preferences Ignored': df.get('Delivery preferences not followed', pd.Series([0])).sum(),
-            'Geo Violation (>25m)': df.get('Geo Distance > 25m', pd.Series([0])).sum(),
-            'No Photo on Delivery': df.get('Unattended Delivery & No Photo on Delivery', pd.Series([0])).sum(),
+            'Household ohne Übergabe': df.get('Delivered to Household Member / Customer', pd.Series([0])).sum(),
+            'Lieferpräferenz nicht eingehalten': df.get('Delivery preferences not followed', pd.Series([0])).sum(),
+            'Geo-Verstoß (>25m)': df.get('Geo Distance > 25m', pd.Series([0])).sum(),
+            'Kein Foto bei Ablage': df.get('Unattended Delivery & No Photo on Delivery', pd.Series([0])).sum(),
             'False Scans': df.get('Feedback False Scan Indicator', pd.Series([0])).sum(),
         }
         
@@ -361,7 +361,7 @@ def main():
                         <div class="g-card-title" style="color: var(--gray-900); font-weight: 500;">{reason}</div>
                         <div style="color: var(--gray-500); font-size: 0.875rem;">{pct:.0f}%</div>
                     </div>
-                    <div class="g-card-stat">{int(count)} cases &nbsp;·&nbsp; Impact: High</div>
+                    <div class="g-card-stat">{int(count)} Fälle &nbsp;·&nbsp; Kritisch</div>
                     <div style="height: 4px; background: var(--gray-100); border-radius: 2px; width: 100%; margin-top: 4px;">
                         <div style="height: 4px; background: var(--google-blue); border-radius: 2px; width: {pct}%;"></div>
                     </div>
@@ -384,7 +384,7 @@ def main():
         st.markdown(f"<div class='meta-text' style='margin-bottom:16px'>{len(drivers)} drivers found</div>", unsafe_allow_html=True)
         for d in drivers[:20]: # Limit list for performance
             risk_class = "risk-critical" if d['count'] > 10 else "risk-warning" if d['count'] > 5 else "risk-ok"
-            risk_label = "Critical" if d['count'] > 10 else "At Risk" if d['count'] > 5 else "Monitor"
+            risk_label = "Kritisch" if d['count'] > 10 else "Risiko" if d['count'] > 5 else "Beobachten"
             
             # Simple clickable mechanic using columns/buttons
             with st.container():
@@ -433,13 +433,13 @@ def main():
             # Risk status
             if cnt > 10:
                 status = "🔴"
-                risk = "Critical"
+                risk = "Kritisch"
             elif cnt > 5:
                 status = "🟠"
-                risk = "At Risk"
+                risk = "Risiko"
             else:
                 status = "🟢"
-                risk = "Monitor"
+                risk = "Beobachten"
             driver_opts.append({
                 'id': did,
                 'count': cnt,
@@ -453,8 +453,8 @@ def main():
         # Prominent Driver Selection Header
         st.markdown("""
         <div style="background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%); color: white; padding: 16px 20px; border-radius: 8px; margin-bottom: 16px;">
-            <div style="font-size: 0.75rem; opacity: 0.8; margin-bottom: 4px;">SELECT DRIVER FOR COACHING</div>
-            <div style="font-size: 1rem;">Choose a driver below to view their action plan</div>
+            <div style="font-size: 0.75rem; opacity: 0.8; margin-bottom: 4px;">FAHRER FÜR COACHING AUSWÄHLEN</div>
+            <div style="font-size: 1rem;">Wähle einen Fahrer aus, um den Maßnahmenplan zu sehen</div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -502,7 +502,7 @@ def main():
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
                     <div>
                         <div style="font-size: 1.25rem; font-weight: 500; color: #202124; margin-bottom: 4px;">{status} {sel_driver}</div>
-                        <div style="font-size: 0.875rem; color: #5f6368;">Top {percentile:.0f}% riskiest drivers</div>
+                        <div style="font-size: 0.875rem; color: #5f6368;">Top {percentile:.0f}% Risiko-Fahrer</div>
                     </div>
                     <div style="background: {risk_bg}; color: {risk_color}; padding: 6px 12px; border-radius: 16px; font-size: 0.75rem; font-weight: 500;">
                         {risk}
@@ -515,11 +515,11 @@ def main():
                     </div>
                     <div>
                         <div style="font-size: 1.5rem; font-weight: 500; color: #202124;">{weeks_active}</div>
-                        <div style="font-size: 0.75rem; color: #5f6368;">Weeks Active</div>
+                        <div style="font-size: 0.75rem; color: #5f6368;">Wochen aktiv</div>
                     </div>
                     <div>
                         <div style="font-size: 1.5rem; font-weight: 500; color: #1a73e8;">{mp}</div>
-                        <div style="font-size: 0.75rem; color: #5f6368;">#1 Issue</div>
+                        <div style="font-size: 0.75rem; color: #5f6368;">#1 Problem</div>
                     </div>
                     <div>
                         <div style="font-size: 1.5rem; font-weight: 500; color: {'#c5221f' if hv_count > 0 else '#202124'};">{hv_count if hv_count > 0 else '—'}</div>
@@ -533,12 +533,12 @@ def main():
             if top_zip and zip_pct > 40:
                 st.markdown(f"""
                 <div style="background: #fef7e0; border-left: 4px solid #f9ab00; padding: 12px 16px; margin-bottom: 16px; border-radius: 0 4px 4px 0;">
-                    <strong>📍 Location Pattern:</strong> {zip_pct:.0f}% of issues from ZIP {top_zip}
+                    <strong>📍 Standort-Muster:</strong> {zip_pct:.0f}% der Probleme aus PLZ {top_zip}
                 </div>
                 """, unsafe_allow_html=True)
             
             # -- Internal Tabs --
-            subtab_coach, subtab_details, subtab_history = st.tabs(["Action Plan", "Analysis", "History"])
+            subtab_coach, subtab_details, subtab_history = st.tabs(["Maßnahmenplan", "Analyse", "Verlauf"])
             
             with subtab_coach:
                 # Enhanced 5-Step Coaching
@@ -553,141 +553,145 @@ def main():
                 except:
                     week_str = "recent period"
                 
-                st.markdown("### Coaching Script")
+                st.markdown("### Coaching-Skript")
                 
                 # 1. Observation (Fact)
                 st.markdown(f"""
                 <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
-                    <div style="font-size: 0.7rem; color: #5f6368; text-transform: uppercase; font-weight: 500; margin-bottom: 8px;">1. OBSERVATION</div>
+                    <div style="font-size: 0.7rem; color: #5f6368; text-transform: uppercase; font-weight: 500; margin-bottom: 8px;">1. FESTSTELLUNG</div>
                     <div style="font-size: 1rem; color: #202124; line-height: 1.6;">
-                        During <strong>{week_str}</strong>, you had <strong>{total} concessions</strong>.
-                        Your primary issue is <strong>{mp}</strong> ({int(max(counts.values()) if counts else 0)} cases).
-                        {f'Additionally, {zip_pct:.0f}% occurred in ZIP {top_zip}.' if top_zip and zip_pct > 30 else ''}
+                        Im Zeitraum <strong>{week_str}</strong> hattest du <strong>{total} Concessions</strong>.
+                        Dein Hauptproblem ist <strong>{mp}</strong> ({int(max(counts.values()) if counts else 0)} Fälle).
+                        {f'Zusätzlich: {zip_pct:.0f}% der Fälle in PLZ {top_zip}.' if top_zip and zip_pct > 30 else ''}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
                 # 2. Specific Behavior
                 if "Household" in mp:
-                    behavior = f"You marked {int(counts.get('Household', 0))} packages as 'Delivered to Household Member' without confirmed personal handover. This appears when you select Household but don't actually hand the package to a person."
+                    behavior = f"Du hast {int(counts.get('Household', 0))} Pakete als 'Haushaltsmitglied' markiert, ohne persönliche Übergabe. Das passiert, wenn du Household wählst, aber das Paket nicht persönlich übergibst."
                 elif "Geo" in mp:
-                    behavior = f"System detected {int(counts.get('Geo >25m', 0))} scans where GPS was >25 meters from delivery address. This typically occurs when scanning packages inside the vehicle before walking to the door."
-                elif "No Photo" in mp:
-                    behavior = f"You had {int(counts.get('No Photo', 0))} unattended deliveries without photo documentation. Without photo evidence, customers can easily claim non-delivery."
+                    behavior = f"Das System hat {int(counts.get('Geo >25m', 0))} Scans erkannt, bei denen GPS >25 Meter von der Lieferadresse entfernt war. Das passiert meist, wenn du im Fahrzeug scannst, bevor du zur Tür gehst."
+                elif "Kein Foto" in mp:
+                    behavior = f"Du hattest {int(counts.get('Kein Foto', 0))} unbeaufsichtigte Zustellungen ohne Foto. Ohne Fotobeweis können Kunden leicht Nicht-Zustellung behaupten."
                 elif "False Scan" in mp:
-                    behavior = f"System flagged {int(counts.get('False Scan', 0))} scans as suspicious. GPS data shows you weren't at the delivery location when the scan occurred."
+                    behavior = f"Das System hat {int(counts.get('False Scan', 0))} Scans als verdächtig markiert. GPS zeigt, dass du nicht am Zustellort warst, als gescannt wurde."
+                elif "Lieferpräferenz" in mp:
+                    behavior = f"Bei {int(counts.get('Lieferpräferenz', 0))} Zustellungen wurden Kundenpräferenzen nicht beachtet. Kunden hinterlegen spezifische Wünsche, die du befolgen musst."
                 else:
-                    behavior = "Multiple delivery compliance issues detected across different categories."
+                    behavior = "Mehrere Compliance-Probleme in verschiedenen Kategorien erkannt."
                 
                 st.markdown(f"""
                 <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
-                    <div style="font-size: 0.7rem; color: #5f6368; text-transform: uppercase; font-weight: 500; margin-bottom: 8px;">2. BEHAVIOR IDENTIFIED</div>
+                    <div style="font-size: 0.7rem; color: #5f6368; text-transform: uppercase; font-weight: 500; margin-bottom: 8px;">2. ERKANNTES VERHALTEN</div>
                     <div style="font-size: 1rem; color: #202124; line-height: 1.6;">{behavior}</div>
                 </div>
                 """, unsafe_allow_html=True)
                 
                 # 3. Impact/Risk
-                if risk == "Critical":
-                    impact = f"You are in the <strong>top {percentile:.0f}%</strong> of drivers by concession volume. This pattern triggers automatic review. Without immediate improvement, next steps include route reassignment or ride-along supervision."
-                elif risk == "At Risk":
-                    impact = f"You are trending toward critical status. If current pattern continues for 2 more weeks, escalation to manager review is automatic."
+                if risk == "Kritisch":
+                    impact = f"Du bist in den <strong>Top {percentile:.0f}%</strong> der Fahrer nach Concession-Volumen. Dieses Muster löst automatische Überprüfung aus. Ohne sofortige Verbesserung folgen: Routen-Neuzuweisung oder Ride-Along-Begleitung."
+                elif risk == "Risiko":
+                    impact = f"Du bewegst dich auf kritischen Status zu. Wenn das aktuelle Muster 2 weitere Wochen anhält, erfolgt automatische Eskalation an den Manager."
                 else:
-                    impact = "While not critical yet, addressing these issues proactively prevents future escalation."
+                    impact = "Noch nicht kritisch, aber proaktives Handeln verhindert zukünftige Eskalation."
                 
                 st.markdown(f"""
                 <div style="background: #fce8e6; padding: 16px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #c5221f;">
-                    <div style="font-size: 0.7rem; color: #c5221f; text-transform: uppercase; font-weight: 500; margin-bottom: 8px;">3. IMPACT</div>
+                    <div style="font-size: 0.7rem; color: #c5221f; text-transform: uppercase; font-weight: 500; margin-bottom: 8px;">3. AUSWIRKUNG</div>
                     <div style="font-size: 1rem; color: #202124; line-height: 1.6;">{impact}</div>
                 </div>
                 """, unsafe_allow_html=True)
                 
                 # 4. Required Actions
                 if "Household" in mp:
-                    actions = ["✅ Select 'Household Member' ONLY when handing to a person face-to-face",
-                              "✅ If no one answers: use Safe Location + take photo",
-                              "❌ Never use Household for packages left at door"]
+                    actions = ["✅ 'Haushaltsmitglied' NUR bei persönlicher Übergabe wählen",
+                              "✅ Wenn niemand öffnet: Safe Location + Foto machen",
+                              "❌ Niemals Household für abgelegte Pakete nutzen"]
                 elif "Geo" in mp:
-                    actions = ["✅ Walk to the door BEFORE scanning",
-                              "✅ For Group Stops: scan each package at its specific door",
-                              "❌ Never scan packages while still in the vehicle"]
-                elif "No Photo" in mp:
-                    actions = ["✅ Take clear photo showing package and door/address",
-                              "✅ Photo required for ALL unattended deliveries",
-                              "❌ Never mark delivered without photo proof"]
+                    actions = ["✅ Zur Tür gehen BEVOR du scannst",
+                              "✅ Bei Group Stops: Jedes Paket an seiner Tür scannen",
+                              "❌ Niemals im Fahrzeug scannen"]
+                elif "Kein Foto" in mp:
+                    actions = ["✅ Klares Foto mit Paket und Tür/Adresse machen",
+                              "✅ Foto ist PFLICHT bei allen unbeaufsichtigten Zustellungen",
+                              "❌ Niemals ohne Fotobeweis als zugestellt markieren"]
                 elif "False Scan" in mp:
-                    actions = ["✅ Only scan when physically at delivery location",
-                              "✅ If GPS issues occur, report immediately",
-                              "⚠️ False Scans may result in immediate termination"]
+                    actions = ["✅ Nur scannen, wenn du physisch am Zustellort bist",
+                              "✅ Bei GPS-Problemen sofort melden",
+                              "⚠️ False Scans können zur sofortigen Kündigung führen"]
+                elif "Lieferpräferenz" in mp:
+                    actions = ["✅ Kundenpräferenzen VOR jeder Zustellung lesen",
+                              "✅ Ablageort und Anweisungen genau befolgen",
+                              "❌ Niemals Präferenzen ignorieren"]
                 else:
-                    actions = ["✅ Follow all standard delivery procedures",
-                              "✅ When unsure, choose 'Unable to Deliver'",
-                              "✅ Ask your dispatcher if unclear"]
+                    actions = ["✅ Alle Standard-Lieferverfahren befolgen",
+                              "✅ Bei Unsicherheit: 'Nicht zustellbar' wählen",
+                              "✅ Dispatcher fragen wenn unklar"]
                 
                 st.markdown(f"""
                 <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
-                    <div style="font-size: 0.7rem; color: #5f6368; text-transform: uppercase; font-weight: 500; margin-bottom: 8px;">4. REQUIRED ACTIONS</div>
+                    <div style="font-size: 0.7rem; color: #5f6368; text-transform: uppercase; font-weight: 500; margin-bottom: 8px;">4. ERFORDERLICHE MASSNAHMEN</div>
                     <div style="font-size: 1rem; color: #202124; line-height: 1.8;">
                         {'<br>'.join(actions)}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # 5. Commitment
                 st.markdown("""
                 <div style="background: #e6f4ea; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 2px solid #34a853;">
-                    <div style="font-size: 0.7rem; color: #137333; text-transform: uppercase; font-weight: 500; margin-bottom: 8px;">5. COMMITMENT</div>
+                    <div style="font-size: 0.7rem; color: #137333; text-transform: uppercase; font-weight: 500; margin-bottom: 8px;">5. VERPFLICHTUNG</div>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                commitment_text = f"I understand the issue with {mp} and commit to following the correct procedure starting today."
-                st.markdown(f"**Statement:** *\"{commitment_text}\"*")
+                commitment_text = f"Ich verstehe das Problem mit {mp} und verpflichte mich, ab heute das korrekte Verfahren zu befolgen."
+                st.markdown(f"**Erklärung:** *\"{commitment_text}\"*")
                 
                 col_btn1, col_btn2 = st.columns([1, 1])
                 with col_btn1:
-                    if st.button("✓ Driver Confirms", use_container_width=True):
-                        st.success("✓ Commitment recorded")
+                    if st.button("✓ Fahrer bestätigt", use_container_width=True):
+                        st.success("✓ Verpflichtung erfasst")
                 with col_btn2:
-                    # Download coaching protocol
-                    protocol = f"""COACHING PROTOCOL
+                    protocol = f"""COACHING-PROTOKOLL
 ═══════════════════════════════════
-Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-Driver: {sel_driver}
+Datum: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+Fahrer: {sel_driver}
 Status: {status} {risk} (Top {percentile:.0f}%)
-Period: {week_str}
-METRICS
+Zeitraum: {week_str}
+KENNZAHLEN
 ───────
 Concessions: {total}
-#1 Issue: {mp}
-Top ZIP: {top_zip} ({zip_pct:.0f}%)
-COACHING POINTS
+#1 Problem: {mp}
+Top PLZ: {top_zip} ({zip_pct:.0f}%)
+COACHING-PUNKTE
 ───────────────
-1. OBSERVATION
-{total} concessions with primary issue: {mp}
-2. BEHAVIOR
+1. FESTSTELLUNG
+{total} Concessions mit Hauptproblem: {mp}
+2. VERHALTEN
 {behavior}
-3. IMPACT
-{"Critical - immediate action required" if risk == "Critical" else "At Risk - improvement needed" if risk == "At Risk" else "Monitor status"}
-4. ACTIONS
+3. AUSWIRKUNG
+{"Kritisch - sofortiges Handeln erforderlich" if risk == "Kritisch" else "Risiko - Verbesserung nötig" if risk == "Risiko" else "Beobachtungsstatus"}
+4. MASSNAHMEN
 {chr(10).join(actions)}
-5. COMMITMENT
+5. VERPFLICHTUNG
 "{commitment_text}"
-SIGNATURES
+UNTERSCHRIFTEN
 ───────────
-Driver: _________________________ Date: _________
-Manager: ________________________ Date: _________
+Fahrer: _________________________ Datum: _________
+Manager: ________________________ Datum: _________
 """
-                    st.download_button("📥 Download Protocol", protocol, f"coaching_{sel_driver[:10]}.txt", use_container_width=True)
+                    st.download_button("📥 Protokoll herunterladen", protocol, f"coaching_{sel_driver[:10]}.txt", use_container_width=True)
             
             with subtab_details:
-                st.markdown("### Problem Breakdown")
+                st.markdown("### Problemaufschlüsselung")
                 
                 # Problem breakdown
                 breakdown = []
                 for col, label in [
-                    ('Geo Distance > 25m', 'Geo Violation'),
-                    ('Delivered to Household Member / Customer', 'Household Issue'),
-                    ('Delivery preferences not followed', 'Prefs Ignored'),
-                    ('Unattended Delivery & No Photo on Delivery', 'No Photo'),
+                    ('Geo Distance > 25m', 'Geo-Verstoß'),
+                    ('Delivered to Household Member / Customer', 'Household-Problem'),
+                    ('Delivery preferences not followed', 'Lieferpräferenz nicht eingehalten'),
+                    ('Unattended Delivery & No Photo on Delivery', 'Kein Foto'),
                     ('Feedback False Scan Indicator', 'False Scan')
                 ]:
                     if col in dd.columns:
@@ -699,15 +703,15 @@ Manager: ________________________ Date: _________
                     st.dataframe(pd.DataFrame(breakdown), use_container_width=True, hide_index=True)
                 
                 # ZIP breakdown
-                st.markdown("### ZIP Code Analysis")
+                st.markdown("### PLZ-Analyse")
                 if 'zip_code' in dd.columns:
                     zc = dd['zip_code'].value_counts().head(5)
                     for z, c in zc.items():
                         pct = (c / total) * 100
-                        st.markdown(f"**{z}**: {c} cases ({pct:.0f}%)")
+                        st.markdown(f"**{z}**: {c} Fälle ({pct:.0f}%)")
                 
                 # Weekly trend
-                st.markdown("### Weekly Pattern")
+                st.markdown("### Wöchentlicher Verlauf")
                 if 'year_week' in dd.columns:
                     weekly = dd.groupby('year_week').size().reset_index(name='count')
                     fig = px.bar(weekly, x='year_week', y='count', text='count')
