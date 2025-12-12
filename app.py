@@ -340,18 +340,31 @@ def load_file_data(uploaded_file):
         # Clean Columns
         df.columns = df.columns.str.strip().str.replace('\n', ' ').str.replace('\r', '')
         
-        # Y/N to Numeric
-        yn_cols = ['High Value Item (Y/N)', 'Feedback False Scan Indicator', 'Attended DNR Deliveries']
+        # Y/N to Numeric - expanded list
+        yn_cols = ['High Value Item (Y/N)', 'High Value Item', 'Feedback False Scan Indicator', 
+                   'Attended DNR Deliveries', 'Mailbox Eligible, Delivered Elsewhere',
+                   'pod_eligible', 'PHR Honoured', 'No Photo On Delivery', 'Photo On Delivery',
+                   'Successful Contact Opportunity', 'Unsuccessful Contact Opportunity']
         for col in yn_cols:
             if col in df.columns:
                 df[col] = df[col].apply(lambda x: 1 if str(x).upper().strip() in ['Y', 'YES', '1', 'TRUE'] else 0)
         
-        # Numeric Conversion
+        # Numeric Conversion - expanded list
         num_cols = ['Concession Cost', 'Geo Distance > 25m', 'Delivered to Household Member / Customer',
-                    'Delivery preferences not followed', 'Unattended Delivery & No Photo on Delivery']
+                    'Delivery preferences not followed', 'Unattended Delivery & No Photo on Delivery',
+                    'Delivered to Neighbour', 'Delivered to Maislot', 'Delivered to Receptionist',
+                    'Simultaneous Group Stops', 'Multiple Concessions Reasons',
+                    'Package Length', 'Package Height', 'Package Width',
+                    'geo_dist', 'total_call_duration_seconds', 'call_event', 'text_event']
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # Parse date columns
+        date_cols = ['delivery_date_time', 'dnr_date']
+        for col in date_cols:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce')
                 
         # Fill missing critical columns
         if 'zip_code' not in df.columns: df['zip_code'] = 'Unknown'
@@ -568,6 +581,224 @@ def get_high_value_summary(df):
         'by_driver': by_driver[:5],  # Top 5
         'records': hv_df
     }
+# Mailbox max dimension in cm (standard German mailbox slot)
+MAILBOX_MAX_CM = 2.5
+def detect_oversized_mailbox_packages(df):
+    """Detect mailbox misbookings:
+    1. Packages >2.5cm marked as mailslot (too large)
+    2. Packages ≤2.5cm marked as Household (should be Briefkasten)
+    3. Mailbox Eligible, Delivered Elsewhere flag
+    """
+    mismatches = []
+    
+    # Check if we have the required columns
+    has_dimensions = all(col in df.columns for col in ['Package Height', 'Package Width'])
+    has_mailslot = 'Delivered to Maislot' in df.columns
+    has_household = 'Delivered to Household Member / Customer' in df.columns
+    has_mailbox_elsewhere = 'Mailbox Eligible, Delivered Elsewhere' in df.columns
+    
+    if has_dimensions:
+        for idx, row in df.iterrows():
+            height = row.get('Package Height', 0)
+            width = row.get('Package Width', 0)
+            
+            # Package fits in mailbox if BOTH height AND width ≤ 2.5cm
+            fits_mailbox = (height <= MAILBOX_MAX_CM) and (width <= MAILBOX_MAX_CM) and (height > 0) and (width > 0)
+            
+            # Package is too large for mailbox
+            is_oversized = (height > MAILBOX_MAX_CM) or (width > MAILBOX_MAX_CM)
+            
+            # Check flags
+            is_mailslot = row.get('Delivered to Maislot', 0) == 1 if has_mailslot else False
+            is_household = row.get('Delivered to Household Member / Customer', 0) == 1 if has_household else False
+            
+            # Type 1: Oversized package marked as mailslot
+            if is_mailslot and is_oversized:
+                mismatches.append({
+                    'tracking_id': row.get('tracking_id', 'Unknown'),
+                    'transporter_id': row.get('transporter_id', 'Unknown'),
+                    'height_cm': height,
+                    'width_cm': width,
+                    'length_cm': row.get('Package Length', 0),
+                    'zip_code': row.get('zip_code', 'Unknown'),
+                    'mismatch_type': 'Übergroß für Briefkasten',
+                    'severity': 'critical',
+                    'detail': f'{height}x{width}cm > {MAILBOX_MAX_CM}cm'
+                })
+            
+            # Type 2: Small package (fits mailbox) but booked as Household
+            if fits_mailbox and is_household and not is_mailslot:
+                mismatches.append({
+                    'tracking_id': row.get('tracking_id', 'Unknown'),
+                    'transporter_id': row.get('transporter_id', 'Unknown'),
+                    'height_cm': height,
+                    'width_cm': width,
+                    'length_cm': row.get('Package Length', 0),
+                    'zip_code': row.get('zip_code', 'Unknown'),
+                    'mismatch_type': 'Briefkasten-fähig als Household',
+                    'severity': 'warning',
+                    'detail': f'{height}x{width}cm passt in Briefkasten'
+                })
+    
+    # Type 3: Existing flag for Mailbox Eligible, Delivered Elsewhere
+    if has_mailbox_elsewhere:
+        elsewhere_df = df[df['Mailbox Eligible, Delivered Elsewhere'] == 1]
+        for idx, row in elsewhere_df.iterrows():
+            # Avoid duplicates - only add if not already flagged
+            tracking = row.get('tracking_id', 'Unknown')
+            if not any(m['tracking_id'] == tracking for m in mismatches):
+                mismatches.append({
+                    'tracking_id': tracking,
+                    'transporter_id': row.get('transporter_id', 'Unknown'),
+                    'height_cm': row.get('Package Height', 0),
+                    'width_cm': row.get('Package Width', 0),
+                    'length_cm': row.get('Package Length', 0),
+                    'zip_code': row.get('zip_code', 'Unknown'),
+                    'mismatch_type': 'Briefkasten-fähig, woanders zugestellt',
+                    'severity': 'warning',
+                    'detail': 'System-Flag'
+                })
+    
+    return pd.DataFrame(mismatches) if mismatches else pd.DataFrame()
+def get_driver_enhanced_stats(df, driver_id):
+    """Get enhanced stats for a driver including cost, trend, repeat offender status."""
+    dd = df[df['transporter_id'] == driver_id]
+    
+    stats = {
+        'total_cost': 0,
+        'avg_cost': 0,
+        'trend_direction': '→',  # ↑ ↓ →
+        'trend_change': 0,
+        'is_repeat_offender': False,
+        'consecutive_weeks': 0,
+        'dimension_misbookings': 0,
+        'contact_attempts': 0,
+        'contact_success_rate': 0,
+        'avg_geo_distance': 0,
+        'delivery_types': {}
+    }
+    
+    if len(dd) == 0:
+        return stats
+    
+    # Cost analysis
+    if 'Concession Cost' in dd.columns:
+        stats['total_cost'] = dd['Concession Cost'].sum()
+        stats['avg_cost'] = dd['Concession Cost'].mean()
+    
+    # Trend analysis (week-over-week)
+    if 'year_week' in dd.columns:
+        weekly = dd.groupby('year_week').size().sort_index()
+        if len(weekly) >= 2:
+            last_week = weekly.iloc[-1]
+            prev_week = weekly.iloc[-2]
+            change = last_week - prev_week
+            stats['trend_change'] = change
+            if change > 0:
+                stats['trend_direction'] = '↑'
+            elif change < 0:
+                stats['trend_direction'] = '↓'
+        
+        # Repeat offender: issues in 3+ consecutive weeks
+        stats['consecutive_weeks'] = len(weekly)
+        if len(weekly) >= 3:
+            stats['is_repeat_offender'] = True
+    
+    # Dimension misbookings
+    if 'Delivered to Maislot' in dd.columns and 'Package Height' in dd.columns:
+        mailslot = dd[dd['Delivered to Maislot'] == 1]
+        oversized = mailslot[(mailslot['Package Height'] > MAILBOX_MAX_CM) | (mailslot['Package Width'] > MAILBOX_MAX_CM)]
+        stats['dimension_misbookings'] = len(oversized)
+    
+    if 'Mailbox Eligible, Delivered Elsewhere' in dd.columns:
+        stats['dimension_misbookings'] += dd['Mailbox Eligible, Delivered Elsewhere'].sum()
+    
+    # Contact attempts
+    if 'call_event' in dd.columns:
+        stats['contact_attempts'] = int(dd['call_event'].sum())
+    if 'Successful Contact Opportunity' in dd.columns and 'Unsuccessful Contact Opportunity' in dd.columns:
+        success = dd['Successful Contact Opportunity'].sum()
+        total = success + dd['Unsuccessful Contact Opportunity'].sum()
+        if total > 0:
+            stats['contact_success_rate'] = (success / total) * 100
+    
+    # Geo distance
+    if 'geo_dist' in dd.columns:
+        stats['avg_geo_distance'] = dd['geo_dist'].mean()
+    
+    # Delivery types breakdown
+    type_cols = {
+        'Household': 'Delivered to Household Member / Customer',
+        'Nachbar': 'Delivered to Neighbour',
+        'Briefkasten': 'Delivered to Maislot',
+        'Rezeption': 'Delivered to Receptionist'
+    }
+    for label, col in type_cols.items():
+        if col in dd.columns:
+            count = int(dd[col].sum())
+            if count > 0:
+                stats['delivery_types'][label] = count
+    
+    return stats
+def get_zip_risk_scores(df):
+    """Calculate risk scores for ZIP codes based on issue density."""
+    if 'zip_code' not in df.columns:
+        return []
+    
+    zip_stats = []
+    for zip_code in df['zip_code'].unique():
+        zd = df[df['zip_code'] == zip_code]
+        count = len(zd)
+        
+        # Calculate issue counts
+        issues = 0
+        if 'Geo Distance > 25m' in zd.columns:
+            issues += zd['Geo Distance > 25m'].sum()
+        if 'Unattended Delivery & No Photo on Delivery' in zd.columns:
+            issues += zd['Unattended Delivery & No Photo on Delivery'].sum()
+        if 'Delivery preferences not followed' in zd.columns:
+            issues += zd['Delivery preferences not followed'].sum()
+        
+        # Cost
+        cost = zd['Concession Cost'].sum() if 'Concession Cost' in zd.columns else 0
+        
+        # Risk score (0-100)
+        risk_score = min(100, (issues / count * 50) + (count / 10)) if count > 0 else 0
+        
+        zip_stats.append({
+            'zip_code': zip_code,
+            'count': count,
+            'issues': int(issues),
+            'cost': cost,
+            'risk_score': round(risk_score, 1)
+        })
+    
+    return sorted(zip_stats, key=lambda x: x['risk_score'], reverse=True)[:10]
+def get_week_comparison(df):
+    """Compare current week vs previous week."""
+    if 'year_week' not in df.columns:
+        return None
+    
+    weeks = sorted(df['year_week'].unique())
+    if len(weeks) < 2:
+        return None
+    
+    current_week = weeks[-1]
+    prev_week = weeks[-2]
+    
+    curr_df = df[df['year_week'] == current_week]
+    prev_df = df[df['year_week'] == prev_week]
+    
+    return {
+        'current_week': current_week,
+        'prev_week': prev_week,
+        'current_count': len(curr_df),
+        'prev_count': len(prev_df),
+        'change': len(curr_df) - len(prev_df),
+        'change_pct': ((len(curr_df) - len(prev_df)) / len(prev_df) * 100) if len(prev_df) > 0 else 0,
+        'current_cost': curr_df['Concession Cost'].sum() if 'Concession Cost' in curr_df.columns else 0,
+        'prev_cost': prev_df['Concession Cost'].sum() if 'Concession Cost' in prev_df.columns else 0
+    }
 # ============================================================================
 # MAIN
 # ============================================================================
@@ -666,7 +897,7 @@ def main():
                         'Kosten': f"€{d['cost']:,.2f}"
                     })
                 if hv_table:
-                    st.dataframe(pd.DataFrame(hv_table), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(hv_table), width='stretch', hide_index=True)
         
         # --- CONCESSION TYPE DISTRIBUTION ---
         st.markdown("---")
@@ -690,7 +921,7 @@ def main():
                 showlegend=False,
                 height=max(150, len(type_dist) * 40)
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             
             # Type badges
             badge_html = ""
@@ -707,35 +938,102 @@ def main():
             st.markdown(f'<div style="margin-top: 8px;">{badge_html}</div>', unsafe_allow_html=True)
         else:
             st.info("Keine Zustellart-Daten verfügbar.")
-    # 2. DRIVERS (People-first)
+    # 2. DRIVERS (People-first) - ENHANCED
     with tab_drivers:
         searched = st.text_input("Find driver", placeholder="Search ID...", label_visibility="collapsed")
         
+        # Build enhanced driver list
         drivers = []
         for did in df['transporter_id'].unique():
             dd = df[df['transporter_id'] == did]
             mp, _ = get_driver_problem(dd)
-            drivers.append({'id': did, 'count': len(dd), 'problem': mp})
+            enhanced = get_driver_enhanced_stats(df, did)
+            
+            drivers.append({
+                'id': did, 
+                'count': len(dd), 
+                'problem': mp,
+                'cost': enhanced['total_cost'],
+                'trend': enhanced['trend_direction'],
+                'trend_change': enhanced['trend_change'],
+                'is_repeat': enhanced['is_repeat_offender'],
+                'weeks': enhanced['consecutive_weeks'],
+                'misbookings': enhanced['dimension_misbookings'],
+                'delivery_types': enhanced['delivery_types']
+            })
         
         drivers = sorted(drivers, key=lambda x: x['count'], reverse=True)
         if searched:
-            drivers = [d for d in drivers if searched.lower() in d['id'].lower()]
+            drivers = [d for d in drivers if searched.lower() in str(d['id']).lower()]
+        
+        # Team summary header
+        total_drivers = len(drivers)
+        critical_count = len([d for d in drivers if d['count'] > 10])
+        repeat_count = len([d for d in drivers if d['is_repeat']])
+        total_cost = sum(d['cost'] for d in drivers)
+        
+        st.markdown(f"""
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px;">
+            <div style="background: var(--gray-50); padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 1.5rem; font-weight: 500; color: #202124;">{total_drivers}</div>
+                <div style="font-size: 0.75rem; color: #5f6368;">Fahrer gesamt</div>
+            </div>
+            <div style="background: #fce8e6; padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 1.5rem; font-weight: 500; color: #c5221f;">{critical_count}</div>
+                <div style="font-size: 0.75rem; color: #c5221f;">Kritisch</div>
+            </div>
+            <div style="background: #fef7e0; padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 1.5rem; font-weight: 500; color: #b06000;">{repeat_count}</div>
+                <div style="font-size: 0.75rem; color: #b06000;">Wiederholungstäter</div>
+            </div>
+            <div style="background: var(--gray-50); padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 1.5rem; font-weight: 500; color: #202124;">€{total_cost:,.0f}</div>
+                <div style="font-size: 0.75rem; color: #5f6368;">Gesamtkosten</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
             
-        st.markdown(f"<div class='meta-text' style='margin-bottom:16px'>{len(drivers)} drivers found</div>", unsafe_allow_html=True)
-        for d in drivers[:20]: # Limit list for performance
+        st.markdown(f"<div class='meta-text' style='margin-bottom:16px'>{len(drivers)} Fahrer gefunden</div>", unsafe_allow_html=True)
+        
+        for d in drivers[:20]:  # Limit list for performance
             risk_class = "risk-critical" if d['count'] > 10 else "risk-warning" if d['count'] > 5 else "risk-ok"
             risk_label = "Kritisch" if d['count'] > 10 else "Risiko" if d['count'] > 5 else "Beobachten"
             
-            # Simple clickable mechanic using columns/buttons
+            # Trend color
+            trend_color = "#c5221f" if d['trend'] == '↑' else "#137333" if d['trend'] == '↓' else "#5f6368"
+            
+            # Build badges
+            badges = []
+            if d['is_repeat']:
+                badges.append(f"<span style='background:#fef7e0; color:#b06000; padding:2px 6px; border-radius:4px; font-size:0.7rem; margin-left:4px;'>🔁 {d['weeks']}W</span>")
+            if d['misbookings'] > 0:
+                badges.append(f"<span style='background:#fce8e6; color:#c5221f; padding:2px 6px; border-radius:4px; font-size:0.7rem; margin-left:4px;'>📦 {int(d['misbookings'])}</span>")
+            
+            badges_html = ''.join(badges)
+            
+            # Delivery types breakdown
+            types_str = ' · '.join([f"{k}:{v}" for k,v in d['delivery_types'].items()]) if d['delivery_types'] else ""
+            
             with st.container():
-                c1, c2, c3 = st.columns([4, 2, 1])
-                with c1:
-                    st.markdown(f"**{d['id']}**<br><span style='font-size:0.8rem; color:#5f6368'>{d['problem']}</span>", unsafe_allow_html=True)
-                with c2:
-                    st.markdown(f"<span class='risk-tag {risk_class}'>{risk_label}</span>", unsafe_allow_html=True)
-                with c3:
-                    st.markdown(f"**{d['count']}**", unsafe_allow_html=True)
-                st.markdown("<hr style='margin: 8px 0; border:none; border-bottom:1px solid #f1f3f4;'>", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f3f4;">
+                    <div style="flex: 3;">
+                        <div style="font-weight: 500; color: #202124;">{d['id']} {badges_html}</div>
+                        <div style="font-size: 0.8rem; color: #5f6368;">{d['problem']} {('· ' + types_str) if types_str else ''}</div>
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                        <span style="color: {trend_color}; font-size: 1.25rem;">{d['trend']}</span>
+                        <span style="font-size: 0.75rem; color: #5f6368;">{d['trend_change']:+d}</span>
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                        <span class='risk-tag {risk_class}'>{risk_label}</span>
+                    </div>
+                    <div style="flex: 1; text-align: right;">
+                        <div style="font-weight: 500;">{d['count']}</div>
+                        <div style="font-size: 0.75rem; color: #5f6368;">€{d['cost']:,.0f}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
     # 3. INSIGHTS (Trends)
     with tab_insights:
         st.markdown("### Weekly Trend")
@@ -750,7 +1048,7 @@ def main():
                 yaxis=dict(showgrid=True, gridcolor='#f1f3f4', title=None, showticklabels=False),
                 height=250
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         
         st.markdown("### Top Zip Codes")
         if 'zip_code' in df.columns:
@@ -798,9 +1096,140 @@ def main():
                     st.markdown(f"**{mtype}** ({len(type_df)} Fälle)")
                     display_cols = ['transporter_id', 'tracking_id', 'detail']
                     available_cols = [c for c in display_cols if c in type_df.columns]
-                    st.dataframe(type_df[available_cols].head(20), use_container_width=True, hide_index=True)
+                    st.dataframe(type_df[available_cols].head(20), width='stretch', hide_index=True)
         else:
             st.success("✓ Keine verdächtigen Muster erkannt")
+        
+        # --- DIMENSION MISBOOKING (NEW) ---
+        st.markdown("---")
+        st.markdown("### 📦 Briefkasten-Dimension Misbookings")
+        st.markdown(f"<div style='font-size: 0.875rem; color: #5f6368; margin-bottom: 12px;'>Pakete ≤2.5cm als Household gebucht (sollten Briefkasten sein)</div>", unsafe_allow_html=True)
+        
+        # Debug info expander
+        with st.expander("🔧 Debug: Daten-Diagnose"):
+            st.write("**Vorhandene Spalten:**")
+            dim_cols = ['Package Height', 'Package Width', 'Package Length', 
+                       'Delivered to Maislot', 'Delivered to Household Member / Customer',
+                       'Mailbox Eligible, Delivered Elsewhere']
+            for col in dim_cols:
+                if col in df.columns:
+                    sample_vals = df[col].head(5).tolist()
+                    non_zero = (df[col] != 0).sum() if pd.api.types.is_numeric_dtype(df[col]) else len(df[df[col].notna()])
+                    st.write(f"✓ `{col}`: {non_zero} non-zero Werte | Sample: {sample_vals}")
+                else:
+                    st.write(f"✗ `{col}`: **FEHLT**")
+            
+            # Check actual values
+            if 'Package Height' in df.columns and 'Package Width' in df.columns:
+                small_packages = df[(df['Package Height'] <= MAILBOX_MAX_CM) & (df['Package Width'] <= MAILBOX_MAX_CM) & (df['Package Height'] > 0) & (df['Package Width'] > 0)]
+                st.write(f"**Pakete ≤{MAILBOX_MAX_CM}cm:** {len(small_packages)}")
+                
+                if 'Delivered to Household Member / Customer' in df.columns:
+                    small_as_household = small_packages[small_packages['Delivered to Household Member / Customer'] == 1]
+                    st.write(f"**Davon als Household:** {len(small_as_household)}")
+        
+        dim_mismatches = detect_oversized_mailbox_packages(df)
+        if len(dim_mismatches) > 0:
+            # Summary by type
+            oversized_count = len(dim_mismatches[dim_mismatches['mismatch_type'] == 'Übergroß für Briefkasten']) if 'mismatch_type' in dim_mismatches.columns else 0
+            elsewhere_count = len(dim_mismatches[dim_mismatches['mismatch_type'] == 'Briefkasten-fähig, woanders zugestellt']) if 'mismatch_type' in dim_mismatches.columns else 0
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if oversized_count > 0:
+                    st.markdown(f"""
+                    <div class="mismatch-card mismatch-critical">
+                        <strong>🚨 {oversized_count} Übergroße Pakete</strong><br>
+                        <span style="font-size: 0.875rem;">Als Briefkasten gebucht, aber >2.5cm</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            with col2:
+                if elsewhere_count > 0:
+                    st.markdown(f"""
+                    <div class="mismatch-card">
+                        <strong>⚠️ {elsewhere_count} Briefkasten-fähig</strong><br>
+                        <span style="font-size: 0.875rem;">Aber woanders zugestellt</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            # Top offenders
+            if 'transporter_id' in dim_mismatches.columns:
+                top_offenders = dim_mismatches['transporter_id'].value_counts().head(5)
+                st.markdown("**Top Fahrer mit Dimension-Misbookings:**")
+                for driver, count in top_offenders.items():
+                    st.markdown(f"• {driver}: **{count}** Fälle")
+            
+            with st.expander(f"Alle {len(dim_mismatches)} Dimension-Misbookings anzeigen"):
+                display_cols = ['transporter_id', 'tracking_id', 'height_cm', 'width_cm', 'mismatch_type']
+                available_cols = [c for c in display_cols if c in dim_mismatches.columns]
+                st.dataframe(dim_mismatches[available_cols].head(30), width='stretch', hide_index=True)
+        else:
+            has_dim_data = 'Package Height' in df.columns and 'Package Width' in df.columns
+            if has_dim_data:
+                st.success("✓ Keine Dimension-Misbookings erkannt")
+            else:
+                st.info("Keine Paketmaß-Spalten (Package Height/Width) verfügbar")
+        
+        # --- ZIP RISK SCORES (NEW) ---
+        st.markdown("---")
+        st.markdown("### 📍 PLZ Risiko-Ranking")
+        
+        zip_risks = get_zip_risk_scores(df)
+        if zip_risks:
+            for i, z in enumerate(zip_risks[:5]):
+                risk_pct = z['risk_score']
+                risk_color = "#c5221f" if risk_pct > 50 else "#b06000" if risk_pct > 25 else "#137333"
+                st.markdown(f"""
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f3f4;">
+                    <div style="flex: 2;">
+                        <div style="font-weight: 500;">PLZ {z['zip_code']}</div>
+                        <div style="font-size: 0.75rem; color: #5f6368;">{z['count']} Concessions · {z['issues']} Issues</div>
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                        <span style="font-size: 0.875rem; color: #5f6368;">€{z['cost']:,.0f}</span>
+                    </div>
+                    <div style="flex: 1; text-align: right;">
+                        <span style="background: {risk_color}; color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 500;">
+                            {risk_pct:.0f}%
+                        </span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # --- WEEK COMPARISON (NEW) ---
+        st.markdown("---")
+        st.markdown("### 📈 Woche-zu-Woche Vergleich")
+        
+        week_comp = get_week_comparison(df)
+        if week_comp:
+            change_color = "#c5221f" if week_comp['change'] > 0 else "#137333" if week_comp['change'] < 0 else "#5f6368"
+            change_icon = "↑" if week_comp['change'] > 0 else "↓" if week_comp['change'] < 0 else "→"
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"""
+                <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: #5f6368; margin-bottom: 4px;">{week_comp['prev_week']}</div>
+                    <div style="font-size: 1.5rem; font-weight: 500;">{week_comp['prev_count']}</div>
+                    <div style="font-size: 0.875rem; color: #5f6368;">€{week_comp['prev_cost']:,.0f}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                st.markdown(f"""
+                <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; text-align: center; border: 2px solid {change_color};">
+                    <div style="font-size: 0.75rem; color: #5f6368; margin-bottom: 4px;">{week_comp['current_week']}</div>
+                    <div style="font-size: 1.5rem; font-weight: 500; color: {change_color};">{week_comp['current_count']}</div>
+                    <div style="font-size: 0.875rem; color: #5f6368;">€{week_comp['current_cost']:,.0f}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown(f"""
+            <div style="text-align: center; margin-top: 12px; font-size: 1.25rem; color: {change_color};">
+                {change_icon} {week_comp['change']:+d} Concessions ({week_comp['change_pct']:+.1f}%)
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Mindestens 2 Wochen Daten benötigt für Vergleich")
     # 4. ACTIONS (Coaching)
     with tab_actions:
         # Build driver list with details for dropdown
@@ -1028,7 +1457,7 @@ def main():
                 
                 col_btn1, col_btn2 = st.columns([1, 1])
                 with col_btn1:
-                    if st.button("✓ Fahrer bestätigt", use_container_width=True):
+                    if st.button("✓ Fahrer bestätigt", width='stretch'):
                         st.success("✓ Verpflichtung erfasst")
                 with col_btn2:
                     protocol = f"""COACHING-PROTOKOLL
@@ -1059,7 +1488,7 @@ UNTERSCHRIFTEN
 Fahrer: _________________________ Datum: _________
 Manager: ________________________ Datum: _________
 """
-                    st.download_button("📥 Protokoll herunterladen", protocol, f"coaching_{sel_driver[:10]}.txt", use_container_width=True)
+                    st.download_button("📥 Protokoll herunterladen", protocol, f"coaching_{sel_driver[:10]}.txt", width='stretch')
             
             with subtab_details:
                 st.markdown("### Problemaufschlüsselung")
@@ -1079,7 +1508,7 @@ Manager: ________________________ Datum: _________
                             breakdown.append({'Issue': label, 'Count': cnt, '%': f"{(cnt/total)*100:.0f}%"})
                 
                 if breakdown:
-                    st.dataframe(pd.DataFrame(breakdown), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(breakdown), width='stretch', hide_index=True)
                 
                 # ZIP breakdown
                 st.markdown("### PLZ-Analyse")
@@ -1125,7 +1554,7 @@ Manager: ________________________ Datum: _________
                             xaxis=dict(showgrid=False, title=None),
                             yaxis=dict(showgrid=True, gridcolor='#f1f3f4', title=None, showticklabels=False)
                         )
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width='stretch')
                 else:
                     st.info("Keine Zeitstempel-Daten verfügbar für Zeitanalyse.")
                 
@@ -1141,12 +1570,12 @@ Manager: ________________________ Datum: _________
                         xaxis=dict(showgrid=False, title=None),
                         yaxis=dict(showgrid=True, gridcolor='#f1f3f4', title=None)
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
             
             with subtab_history:
                 cols_to_show = ['year_week', 'tracking_id', 'zip_code']
                 if 'Concession Cost' in dd.columns:
                     cols_to_show.append('Concession Cost')
-                st.dataframe(dd[cols_to_show], use_container_width=True, hide_index=True)
+                st.dataframe(dd[cols_to_show], width='stretch', hide_index=True)
 if __name__ == "__main__":
     main()
