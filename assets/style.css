@@ -1,0 +1,400 @@
+/*
+ * LTS Quality Management Platform - Enterprise Theme
+ * Custom CSS for Streamlit UI Enhancement
+ */
+
+/* ============================================
+   1. TYPOGRAPHY & FONTS (Google Inter)
+   ============================================ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+    /* LTS Brand Colors */
+    --lts-primary: #0D47A1;        /* Deep Navy - Trust/Authority */
+    --lts-primary-light: #1565C0;
+    --lts-primary-dark: #0A3A7D;
+    
+    --lts-accent-red: #C62828;     /* Signal Red - Alerts/Risk */
+    --lts-accent-red-light: #EF5350;
+    --lts-accent-red-bg: #FFEBEE;
+    
+    --lts-accent-green: #2E7D32;   /* Emerald - Success/Good */
+    --lts-accent-green-light: #66BB6A;
+    --lts-accent-green-bg: #E8F5E9;
+    
+    --lts-accent-yellow: #F9A825;  /* Amber - Warning/Medium */
+    --lts-accent-yellow-bg: #FFF8E1;
+    
+    /* Neutral Palette */
+    --lts-bg-primary: #FAFBFC;     /* Off-white background */
+    --lts-bg-card: #FFFFFF;
+    --lts-bg-sidebar: #F5F7FA;
+    --lts-text-primary: #1A1A2E;
+    --lts-text-secondary: #4A5568;
+    --lts-text-muted: #718096;
+    --lts-border: #E2E8F0;
+    
+    /* Shadows */
+    --lts-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --lts-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --lts-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    
+    /* Spacing */
+    --lts-radius-sm: 6px;
+    --lts-radius-md: 10px;
+    --lts-radius-lg: 16px;
+}
+
+/* Global Font Application */
+html, body, [class*="st-"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+/* ============================================
+   2. MAIN CONTAINER & LAYOUT
+   ============================================ */
+.stApp {
+    background-color: var(--lts-bg-primary);
+}
+
+/* Reduce default padding */
+.block-container {
+    padding: 2rem 3rem !important;
+    max-width: 1400px !important;
+}
+
+/* Sidebar Styling */
+section[data-testid="stSidebar"] {
+    background-color: var(--lts-bg-sidebar);
+    border-right: 1px solid var(--lts-border);
+}
+
+section[data-testid="stSidebar"] > div {
+    padding-top: 1.5rem;
+}
+
+/* ============================================
+   3. HEADERS & TITLES
+   ============================================ */
+h1 {
+    color: var(--lts-primary) !important;
+    font-weight: 700 !important;
+    font-size: 2rem !important;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem !important;
+}
+
+h2 {
+    color: var(--lts-text-primary) !important;
+    font-weight: 600 !important;
+    font-size: 1.5rem !important;
+    border-bottom: 2px solid var(--lts-primary);
+    padding-bottom: 0.5rem;
+    margin-top: 1.5rem !important;
+}
+
+h3 {
+    color: var(--lts-text-secondary) !important;
+    font-weight: 500 !important;
+    font-size: 1.1rem !important;
+}
+
+/* ============================================
+   4. METRIC CARDS (Override st.metric)
+   ============================================ */
+[data-testid="stMetric"] {
+    background-color: var(--lts-bg-card);
+    border: 1px solid var(--lts-border);
+    border-radius: var(--lts-radius-md);
+    padding: 1rem 1.25rem;
+    box-shadow: var(--lts-shadow-sm);
+    transition: box-shadow 0.2s ease;
+}
+
+[data-testid="stMetric"]:hover {
+    box-shadow: var(--lts-shadow-md);
+}
+
+[data-testid="stMetricLabel"] {
+    font-size: 0.85rem !important;
+    color: var(--lts-text-muted) !important;
+    font-weight: 500 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+[data-testid="stMetricValue"] {
+    font-size: 1.75rem !important;
+    font-weight: 700 !important;
+    color: var(--lts-primary) !important;
+}
+
+[data-testid="stMetricDelta"] > div {
+    font-size: 0.8rem !important;
+}
+
+/* ============================================
+   5. TABS NAVIGATION
+   ============================================ */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0.5rem;
+    background-color: var(--lts-bg-card);
+    padding: 0.5rem;
+    border-radius: var(--lts-radius-md);
+    border: 1px solid var(--lts-border);
+}
+
+.stTabs [data-baseweb="tab"] {
+    border-radius: var(--lts-radius-sm);
+    padding: 0.75rem 1.25rem;
+    font-weight: 500;
+    color: var(--lts-text-secondary);
+    transition: all 0.2s ease;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    background-color: var(--lts-bg-primary);
+    color: var(--lts-primary);
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: var(--lts-primary) !important;
+    color: white !important;
+}
+
+/* Remove default tab underline */
+.stTabs [data-baseweb="tab-highlight"] {
+    display: none;
+}
+
+/* ============================================
+   6. BUTTONS
+   ============================================ */
+.stButton > button {
+    background-color: var(--lts-primary);
+    color: white;
+    border: none;
+    border-radius: var(--lts-radius-sm);
+    padding: 0.6rem 1.5rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.stButton > button:hover {
+    background-color: var(--lts-primary-light);
+    box-shadow: var(--lts-shadow-md);
+    transform: translateY(-1px);
+}
+
+/* Secondary Button Style */
+.stButton > button[kind="secondary"] {
+    background-color: transparent;
+    color: var(--lts-primary);
+    border: 1px solid var(--lts-primary);
+}
+
+/* Download Button */
+.stDownloadButton > button {
+    background-color: var(--lts-accent-green);
+}
+
+/* ============================================
+   7. DATAFRAMES & TABLES
+   ============================================ */
+[data-testid="stDataFrame"] {
+    border: 1px solid var(--lts-border);
+    border-radius: var(--lts-radius-md);
+    overflow: hidden;
+}
+
+[data-testid="stDataFrame"] th {
+    background-color: var(--lts-primary) !important;
+    color: white !important;
+    font-weight: 600;
+}
+
+/* ============================================
+   8. ALERTS & NOTIFICATIONS
+   ============================================ */
+.stAlert {
+    border-radius: var(--lts-radius-md);
+    border-left-width: 4px;
+}
+
+/* Success */
+[data-testid="stAlert"][data-baseweb="notification"]:has(.st-success) {
+    background-color: var(--lts-accent-green-bg);
+    border-color: var(--lts-accent-green);
+}
+
+/* Warning */
+[data-testid="stAlert"][data-baseweb="notification"]:has(.st-warning) {
+    background-color: var(--lts-accent-yellow-bg);
+    border-color: var(--lts-accent-yellow);
+}
+
+/* Error */
+[data-testid="stAlert"][data-baseweb="notification"]:has(.st-error) {
+    background-color: var(--lts-accent-red-bg);
+    border-color: var(--lts-accent-red);
+}
+
+/* ============================================
+   9. CHARTS (Plotly tweaks via Streamlit)
+   ============================================ */
+[data-testid="stPlotlyChart"] {
+    border-radius: var(--lts-radius-md);
+    overflow: hidden;
+    box-shadow: var(--lts-shadow-sm);
+}
+
+/* ============================================
+   10. INPUT ELEMENTS
+   ============================================ */
+.stSelectbox > div > div,
+.stTextInput > div > div {
+    border-radius: var(--lts-radius-sm) !important;
+    border-color: var(--lts-border) !important;
+}
+
+.stSelectbox > div > div:focus-within,
+.stTextInput > div > div:focus-within {
+    border-color: var(--lts-primary) !important;
+    box-shadow: 0 0 0 2px rgba(13, 71, 161, 0.2);
+}
+
+/* ============================================
+   11. EXPANDER
+   ============================================ */
+.streamlit-expanderHeader {
+    background-color: var(--lts-bg-card);
+    border: 1px solid var(--lts-border);
+    border-radius: var(--lts-radius-sm);
+    font-weight: 500;
+}
+
+/* ============================================
+   12. DIVIDERS
+   ============================================ */
+hr {
+    border-color: var(--lts-border) !important;
+    margin: 1.5rem 0 !important;
+}
+
+/* ============================================
+   13. CUSTOM COMPONENT CLASSES
+   ============================================ */
+
+/* Risk Badge - High */
+.risk-badge-high {
+    background-color: var(--lts-accent-red);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    display: inline-block;
+}
+
+/* Risk Badge - Medium */
+.risk-badge-medium {
+    background-color: var(--lts-accent-yellow);
+    color: #333;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    display: inline-block;
+}
+
+/* Risk Badge - Low */
+.risk-badge-low {
+    background-color: var(--lts-accent-green);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    display: inline-block;
+}
+
+/* KPI Card */
+.kpi-card {
+    background: linear-gradient(135deg, var(--lts-bg-card) 0%, #F8FAFC 100%);
+    border: 1px solid var(--lts-border);
+    border-radius: var(--lts-radius-lg);
+    padding: 1.5rem;
+    text-align: center;
+    box-shadow: var(--lts-shadow-md);
+}
+
+.kpi-card-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--lts-primary);
+    line-height: 1.2;
+}
+
+.kpi-card-label {
+    font-size: 0.9rem;
+    color: var(--lts-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.5rem;
+}
+
+.kpi-card-delta {
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+}
+
+.kpi-card-delta.positive {
+    color: var(--lts-accent-green);
+}
+
+.kpi-card-delta.negative {
+    color: var(--lts-accent-red);
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 3rem 2rem;
+    background-color: var(--lts-bg-card);
+    border: 2px dashed var(--lts-border);
+    border-radius: var(--lts-radius-lg);
+}
+
+.empty-state-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.empty-state-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--lts-text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.empty-state-description {
+    color: var(--lts-text-muted);
+    font-size: 0.95rem;
+}
+
+/* ============================================
+   14. FOOTER
+   ============================================ */
+footer {
+    visibility: hidden;
+}
+
+/* Custom Footer */
+.lts-footer {
+    text-align: center;
+    padding: 1.5rem;
+    color: var(--lts-text-muted);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--lts-border);
+    margin-top: 2rem;
+}
