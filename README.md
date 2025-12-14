@@ -1,30 +1,30 @@
 # LTS Quality Management
 
-Datengestütztes Concession Management & Fahrer-Coaching Tool.
+*Automatically synced with your [v0.app](https://v0.app) deployments*
 
-## Features
+[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/naserzaher96-1979s-projects/v0-lts-quality-management)
+[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app/chat/qWtE3pKx7te)
 
-- 📊 **Action Roadmap** - Priorisierte Maßnahmen basierend auf Root Cause Analyse
-- 👥 **Fahrer Watchlist** - Pareto-Analyse aller Fahrer nach Problemkategorien
-- 📈 **Trend Analyse** - Wöchentliche Entwicklung und ZIP-Code Heatmap
-- 🎓 **Coaching Tool** - Automatische Coaching-Skripte pro Fahrer
+## Overview
 
-## Daten-Format
+This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
+Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
 
-Unterstützt CSV und Excel (xlsx/xls) mit folgenden Spalten:
-- `transporter_id` - Fahrer-ID
-- `tracking_id` - Paket-Tracking-Nummer
-- `year_week` - Kalenderwoche (z.B. "2025-44")
-- `zip_code` - Postleitzahl
-- `Concession Cost` - Kosten
-- `Geo Distance > 25m` - GPS-Abweichung (0/1)
-- `Delivered to Household Member / Customer` - Übergabe-Flag (0/1)
-- `Delivery preferences not followed` - Präferenzen ignoriert (0/1)
-- `Feedback False Scan Indicator` - False Scan (Y/N)
-- `High Value Item (Y/N)` - Hochwertiges Paket
+## Deployment
 
-## Nutzung
+Your project is live at:
 
-1. CSV/Excel-Datei in der Sidebar hochladen
-2. Navigation über die Sidebar
-3. Im Coaching Tool: Fahrer auswählen → Skript wird generiert
+**[https://vercel.com/naserzaher96-1979s-projects/v0-lts-quality-management](https://vercel.com/naserzaher96-1979s-projects/v0-lts-quality-management)**
+
+## Build your app
+
+Continue building your app on:
+
+**[https://v0.app/chat/qWtE3pKx7te](https://v0.app/chat/qWtE3pKx7te)**
+
+## How It Works
+
+1. Create and modify your project using [v0.app](https://v0.app)
+2. Deploy your chats from the v0 interface
+3. Changes are automatically pushed to this repository
+4. Vercel deploys the latest version from this repository
