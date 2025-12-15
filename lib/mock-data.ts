@@ -34,6 +34,15 @@ export interface ConcessionType {
   percentage: number
 }
 
+export interface ConcessionEvent {
+  id: string
+  driverId: string
+  depotId: string
+  timestamp: string
+  isConcession: boolean
+  type: string
+}
+
 export interface HourlyPattern {
   hour: number
   day: string
@@ -226,6 +235,31 @@ export const abusePatterns: AbusePattern[] = [
     pattern: "Gelegentliche Briefkasten-Präferenz",
   },
 ]
+
+export const generateConcessionEvents = (count = 120): ConcessionEvent[] => {
+  const drivers = generateDrivers(25)
+  const events: ConcessionEvent[] = []
+  const today = new Date()
+
+  for (let i = 0; i < count; i++) {
+    const driver = drivers[Math.floor(Math.random() * drivers.length)]
+    const dayOffset = Math.floor(Math.random() * 28)
+    const date = new Date(today)
+    date.setDate(date.getDate() - dayOffset)
+
+    const isConcession = Math.random() < driver.concessionRate / 100 + 0.03
+    events.push({
+      id: `EVT-${i + 1}`,
+      driverId: driver.id,
+      depotId: driver.depotId,
+      timestamp: date.toISOString(),
+      isConcession,
+      type: isConcession ? "Nachbar" : "Standard",
+    })
+  }
+
+  return events
+}
 
 // Feature importance for ML model
 export const featureImportance = [

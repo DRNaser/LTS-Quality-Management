@@ -7,6 +7,7 @@ import { KPICard } from "@/components/dashboard/kpi-card"
 import { ChartCard } from "@/components/dashboard/chart-card"
 import { DataTable } from "@/components/dashboard/data-table"
 import { StatusBadge } from "@/components/dashboard/status-badge"
+import { PatternsPanel } from "@/components/dashboard/patterns-panel"
 import { generateDrivers, generateDailyMetrics, concessionTypes } from "@/lib/mock-data"
 import { Package, Users, TrendingDown, Euro, Target } from "lucide-react"
 import {
@@ -209,6 +210,10 @@ export default function OverviewPage() {
                 onRowClick={(driver) => console.log("Navigate to driver:", driver.id)}
               />
             </ChartCard>
+          </div>
+
+          <div className="mt-6">
+            <PatternsPanel />
           </div>
         </div>
       </main>
